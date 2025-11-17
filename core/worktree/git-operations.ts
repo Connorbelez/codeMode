@@ -403,6 +403,7 @@ export class GitOperations implements IGitOperations {
     options?: {
       message?: string;
       noCommit?: boolean;
+      cwd?: string;
     },
   ): Promise<{ success: boolean; conflicts?: string[] }> {
     if (!branch) {
@@ -423,10 +424,10 @@ export class GitOperations implements IGitOperations {
       case "rebase":
         // Rebase is a different command
         try {
-          await this.execGit(`rebase ${branch}`);
+          await this.execGit(`rebase ${branch}`, options?.cwd);
           return { success: true };
         } catch (error) {
-          const conflicts = await this.getConflictedFiles();
+          const conflicts = await this.getConflictedFiles(options?.cwd);
           return { success: false, conflicts };
         }
       case "fast-forward":
@@ -442,10 +443,10 @@ export class GitOperations implements IGitOperations {
     }
 
     try {
-      await this.execGit(`merge ${flags.join(" ")} ${branch}`);
+      await this.execGit(`merge ${flags.join(" ")} ${branch}`, options?.cwd);
       return { success: true };
     } catch (error) {
-      const conflicts = await this.getConflictedFiles();
+      const conflicts = await this.getConflictedFiles(options?.cwd);
       return { success: false, conflicts };
     }
   }
@@ -453,9 +454,12 @@ export class GitOperations implements IGitOperations {
   /**
    * Get list of conflicted files.
    */
-  private async getConflictedFiles(): Promise<string[]> {
+  private async getConflictedFiles(cwd?: string): Promise<string[]> {
     try {
-      const { stdout } = await this.execGit("diff --name-only --diff-filter=U");
+      const { stdout } = await this.execGit(
+        "diff --name-only --diff-filter=U",
+        cwd,
+      );
       return stdout
         .split("\n")
         .filter((line) => line.trim())

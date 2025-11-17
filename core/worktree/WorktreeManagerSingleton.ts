@@ -207,8 +207,11 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     }
 
     // Validate disk quota not exceeded
-    if (await this.isDiskQuotaExceeded()) {
-      throw WorktreeErrors.diskQuotaExceeded();
+    const diskUsage = await this.getDiskUsage();
+    if (diskUsage.limitsExceeded) {
+      const currentMB = Math.ceil(diskUsage.totalBytes / (1024 * 1024));
+      const limitMB = this.config.limits.maxTotalSizeMB;
+      throw WorktreeErrors.diskQuotaExceeded(currentMB, limitMB);
     }
 
     // Generate unique worktree ID
@@ -531,9 +534,6 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     }
 
     const previousSessionId = this.currentWorktree;
-
-    // Update process CWD
-    process.chdir(session.worktreePath);
     this.currentWorktree = sessionId;
 
     // Update last accessed
@@ -563,8 +563,6 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     this.ensureInitialized();
 
     const previousSessionId = this.currentWorktree;
-
-    process.chdir(this.repositoryPath);
     this.currentWorktree = undefined;
 
     if (previousSessionId) {
@@ -660,7 +658,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     if (!options?.allowUncommitted) {
       const status = await this.gitOps.getStatus(session.worktreePath);
       if (!status.isClean) {
-        throw WorktreeErrors.uncommittedChanges();
+        throw WorktreeErrors.uncommittedChanges(sessionId);
       }
     }
 
@@ -672,65 +670,54 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
       }
     }
 
-    // Switch to target branch
-    const originalCwd = process.cwd();
-    try {
-      process.chdir(this.repositoryPath);
+    // Perform merge (against repository root)
+    const mergeResult = await this.gitOps.merge(session.branchName, strategy, {
+      message: options?.commitMessage,
+      cwd: this.repositoryPath,
+    });
 
-      // Perform merge
-      const mergeResult = await this.gitOps.merge(
-        session.branchName,
-        strategy,
-        {
-          message: options?.commitMessage,
-        },
-      );
-
-      if (!mergeResult.success) {
-        return {
-          success: false,
-          targetBranch,
-          conflicts: mergeResult.conflicts,
-          message: "Merge conflicts detected",
-          timestamp: new Date(),
-        };
-      }
-
-      // Get commit hash
-      const { stdout: commitHash } = await execAsync("git rev-parse HEAD", {
-        cwd: this.repositoryPath,
-      });
-
-      // Update session status
-      session.status = "merged";
-      await this.registry.upsert(session);
-      this.sessions.set(sessionId, session);
-
-      const result: MergeResult = {
-        success: true,
+    if (!mergeResult.success) {
+      return {
+        success: false,
         targetBranch,
-        commitHash: commitHash.trim(),
-        message: "Successfully merged",
+        conflicts: mergeResult.conflicts,
+        message: "Merge conflicts detected",
         timestamp: new Date(),
       };
-
-      // Emit merged event
-      this.emit({
-        type: "merged",
-        sessionId,
-        result,
-        timestamp: new Date(),
-      });
-
-      // Remove worktree if requested
-      if (options?.deleteAfterMerge) {
-        await this.removeWorktree(sessionId, { deleteBranch: true });
-      }
-
-      return result;
-    } finally {
-      process.chdir(originalCwd);
     }
+
+    // Get commit hash
+    const { stdout: commitHash } = await execAsync("git rev-parse HEAD", {
+      cwd: this.repositoryPath,
+    });
+
+    // Update session status
+    session.status = "merged";
+    await this.registry.upsert(session);
+    this.sessions.set(sessionId, session);
+
+    const result: MergeResult = {
+      success: true,
+      targetBranch,
+      commitHash: commitHash.trim(),
+      message: "Successfully merged",
+      timestamp: new Date(),
+    };
+
+    // Emit merged event
+    this.emit({
+      type: "merged",
+      sessionId,
+      result,
+      timestamp: new Date(),
+    });
+
+    // Remove worktree if requested
+    if (options?.deleteAfterMerge) {
+      await this.removeWorktree(sessionId, { deleteBranch: true });
+    }
+
+    return result;
   }
 
   /**
@@ -792,7 +779,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     if (!options?.force) {
       const status = await this.gitOps.getStatus(session.worktreePath);
       if (!status.isClean) {
-        throw WorktreeErrors.uncommittedChanges();
+        throw WorktreeErrors.uncommittedChanges(sessionId);
       }
     }
 

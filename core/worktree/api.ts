@@ -208,10 +208,11 @@ export interface IWorktreeManager {
   // =========================================================================
 
   /**
-   * Switch current working directory to a worktree.
+   * Mark a worktree as the active context for UI/editor features.
    *
-   * Updates process CWD and reconfigures associated E2B sandbox if present.
-   * This allows subsequent operations to work in the worktree context.
+   * Does not mutate the Node.js process working directory. Callers should
+   * resolve the worktree path (e.g., via `getWorktree(sessionId)`) and pass it
+   * explicitly as `cwd` to any operations that need it.
    *
    * @param sessionId - Worktree session ID to switch to
    * @throws {WorktreeError} If worktree not found or switch fails
@@ -219,8 +220,8 @@ export interface IWorktreeManager {
    * @example
    * ```typescript
    * await manager.switchToWorktree('wt-123');
-   * // Now in worktree context - git commands run here
-   * await exec('npm test');  // Tests run in worktree
+   * const session = manager.getWorktree('wt-123');
+   * await exec('npm test', { cwd: session.worktreePath });
    * ```
    */
   switchToWorktree(sessionId: string): Promise<void>;
@@ -228,12 +229,15 @@ export interface IWorktreeManager {
   /**
    * Get currently active worktree session ID if any.
    *
-   * @returns Session ID if in a worktree context, undefined otherwise
+   * Consumers should use the returned ID to look up the worktree path and pass
+   * it as `cwd` when running commands.
+   *
+   * @returns Session ID if a worktree is active, undefined otherwise
    */
   getCurrentWorktree(): string | undefined;
 
   /**
-   * Switch back to main repository (exit worktree context).
+   * Clear active worktree tracking (return to main repository context).
    */
   switchToMainRepo(): Promise<void>;
 
@@ -586,6 +590,7 @@ export interface IGitOperations {
     options?: {
       message?: string;
       noCommit?: boolean;
+      cwd?: string;
     },
   ): Promise<{ success: boolean; conflicts?: string[] }>;
 
