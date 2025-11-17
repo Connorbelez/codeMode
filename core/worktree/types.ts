@@ -7,6 +7,10 @@
  * @module core/worktree/types
  */
 
+import type { WorktreeError } from "./errors";
+export type { WorktreeError } from "./errors";
+export { WorktreeErrorCode, WorktreeErrors, isWorktreeError } from "./errors";
+
 // ============================================================================
 // Core Session Types
 // ============================================================================
@@ -444,65 +448,6 @@ export interface ValidationResult {
 }
 
 // ============================================================================
-// Error Types
-// ============================================================================
-
-/**
- * Error codes for worktree operations
- */
-export enum WorktreeErrorCode {
-  CREATION_FAILED = "CREATION_FAILED",
-  WORKTREE_NOT_FOUND = "WORKTREE_NOT_FOUND",
-  BRANCH_EXISTS = "BRANCH_EXISTS",
-  BRANCH_NOT_FOUND = "BRANCH_NOT_FOUND",
-  INVALID_STATE = "INVALID_STATE",
-  MERGE_CONFLICT = "MERGE_CONFLICT",
-  DISK_QUOTA_EXCEEDED = "DISK_QUOTA_EXCEEDED",
-  MAX_WORKTREES_REACHED = "MAX_WORKTREES_REACHED",
-  GIT_OPERATION_FAILED = "GIT_OPERATION_FAILED",
-  UNCOMMITTED_CHANGES = "UNCOMMITTED_CHANGES",
-  VALIDATION_FAILED = "VALIDATION_FAILED",
-  PATH_NOT_FOUND = "PATH_NOT_FOUND",
-  PERMISSION_DENIED = "PERMISSION_DENIED",
-  TESTS_FAILED = "TESTS_FAILED",
-  ALREADY_EXISTS = "ALREADY_EXISTS",
-}
-
-/**
- * Custom error class for worktree operations
- */
-export class WorktreeError extends Error {
-  constructor(
-    message: string,
-    public code: WorktreeErrorCode,
-    public sessionId?: string,
-    public cause?: Error
-  ) {
-    super(message);
-    this.name = "WorktreeError";
-
-    // Maintains proper stack trace for where error was thrown
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, WorktreeError);
-    }
-  }
-
-  /**
-   * Convert error to JSON for serialization
-   */
-  toJSON(): Record<string, unknown> {
-    return {
-      name: this.name,
-      message: this.message,
-      code: this.code,
-      sessionId: this.sessionId,
-      cause: this.cause?.message,
-      stack: this.stack,
-    };
-  }
-}
-
-// ============================================================================
 // Event Types
 // ============================================================================
 
@@ -704,13 +649,6 @@ export function isWorktreeSession(value: unknown): value is WorktreeSession {
     "worktreePath" in value &&
     "branchName" in value
   );
-}
-
-/**
- * Type guard for checking if value is a WorktreeError
- */
-export function isWorktreeError(value: unknown): value is WorktreeError {
-  return value instanceof WorktreeError;
 }
 
 /**

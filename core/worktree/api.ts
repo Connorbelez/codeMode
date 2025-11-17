@@ -16,6 +16,7 @@ import type {
   DiffResult,
   MergeOptions,
   MergeResult,
+  MergeStrategy,
   RemoveOptions,
   CleanupReport,
   DiskUsageReport,
@@ -110,7 +111,7 @@ export interface IWorktreeManager {
    */
   createWorktree(
     agentSessionId: string,
-    options?: CreateWorktreeOptions
+    options?: CreateWorktreeOptions,
   ): Promise<WorktreeSession>;
 
   /**
@@ -129,7 +130,9 @@ export interface IWorktreeManager {
    * @param agentSessionId - Agent session ID
    * @returns WorktreeSession if found, undefined otherwise
    */
-  getWorktreeByAgentSession(agentSessionId: string): WorktreeSession | undefined;
+  getWorktreeByAgentSession(
+    agentSessionId: string,
+  ): WorktreeSession | undefined;
 
   /**
    * List all worktrees with optional filtering.
@@ -197,7 +200,7 @@ export interface IWorktreeManager {
    */
   compareBranches(
     sessionId: string,
-    targetBranch: string
+    targetBranch: string,
   ): Promise<BranchComparison>;
 
   // =========================================================================
@@ -264,7 +267,7 @@ export interface IWorktreeManager {
   diffWorktrees(
     source: string,
     target: string,
-    options?: DiffOptions
+    options?: DiffOptions,
   ): Promise<DiffResult>;
 
   /**
@@ -276,7 +279,7 @@ export interface IWorktreeManager {
    * @returns Matrix of pairwise comparisons
    */
   compareMultipleWorktrees(
-    sessionIds: string[]
+    sessionIds: string[],
   ): Promise<Map<string, Map<string, DiffResult>>>;
 
   // =========================================================================
@@ -314,7 +317,7 @@ export interface IWorktreeManager {
    */
   mergeWorktree(
     sessionId: string,
-    options?: MergeOptions
+    options?: MergeOptions,
   ): Promise<MergeResult>;
 
   /**
@@ -328,7 +331,7 @@ export interface IWorktreeManager {
    */
   canMergeCleanly(
     sessionId: string,
-    targetBranch?: string
+    targetBranch?: string,
   ): Promise<{
     canMerge: boolean;
     conflicts: string[];
@@ -500,7 +503,7 @@ export interface IWorktreeManager {
    */
   on(
     event: WorktreeEventUnion["type"],
-    handler: (event: WorktreeEventUnion) => void
+    handler: (event: WorktreeEventUnion) => void,
   ): void;
 
   /**
@@ -508,7 +511,7 @@ export interface IWorktreeManager {
    */
   off(
     event: WorktreeEventUnion["type"],
-    handler: (event: WorktreeEventUnion) => void
+    handler: (event: WorktreeEventUnion) => void,
   ): void;
 
   /**
@@ -538,7 +541,7 @@ export interface IGitOperations {
   createWorktree(
     path: string,
     branchName: string,
-    baseBranch: string
+    baseBranch: string,
   ): Promise<void>;
 
   /**
@@ -571,7 +574,7 @@ export interface IGitOperations {
   getDiff(
     ref1: string,
     ref2: string,
-    options?: DiffOptions
+    options?: DiffOptions,
   ): Promise<DiffResult>;
 
   /**
@@ -583,7 +586,7 @@ export interface IGitOperations {
     options?: {
       message?: string;
       noCommit?: boolean;
-    }
+    },
   ): Promise<{ success: boolean; conflicts?: string[] }>;
 
   /**
@@ -591,7 +594,7 @@ export interface IGitOperations {
    */
   getAheadBehind(
     branch1: string,
-    branch2: string
+    branch2: string,
   ): Promise<{ ahead: number; behind: number }>;
 
   /**
@@ -619,7 +622,7 @@ export interface IGitOperations {
    */
   checkMergeConflicts(
     sourceBranch: string,
-    targetBranch: string
+    targetBranch: string,
   ): Promise<string[]>;
 }
 
@@ -678,7 +681,7 @@ export interface IWorktreeLifecycleHooks {
    */
   beforeCreate?(
     agentSessionId: string,
-    options: CreateWorktreeOptions
+    options: CreateWorktreeOptions,
   ): Promise<void>;
 
   /**

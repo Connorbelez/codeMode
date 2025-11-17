@@ -64,7 +64,6 @@ const references = await lsp.findReferences({
   filepath: definition.filepath,
   line: definition.range.start.line,
   character: definition.range.start.character,
-  includeDeclaration: false,
 });
 
 console.log(`✓ Found ${references.length} references across the codebase:`);

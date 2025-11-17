@@ -112,7 +112,6 @@ export class LspMcpBridge {
     filepath: string;
     line: number;
     character: number;
-    includeDeclaration?: boolean;
   }) {
     try {
       const uri = vscode.Uri.parse(args.filepath);

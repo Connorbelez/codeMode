@@ -189,7 +189,6 @@ describe("LspMcpBridge", () => {
         filepath: "/test/file.ts",
         line: 10,
         character: 12,
-        includeDeclaration: false,
       });
 
       expect(result).toHaveLength(2);
