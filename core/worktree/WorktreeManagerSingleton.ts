@@ -8,46 +8,45 @@
  * @module core/worktree/WorktreeManagerSingleton
  */
 
+import { exec, spawn } from "child_process";
+import fs from "fs/promises";
 import path from "path";
+import { promisify } from "util";
 import type {
-  IWorktreeManager,
-  IGitOperations,
   IFilesystemOperations,
+  IGitOperations,
+  IWorktreeManager,
   IWorktreeRegistry,
 } from "./api";
+import { DEFAULT_WORKTREE_CONFIG } from "./constants";
+import { WorktreeErrors } from "./errors";
+import { FilesystemOperations } from "./filesystem-operations";
+import { GitOperations } from "./git-operations";
+import { WorktreeRegistry } from "./registry";
 import type {
-  WorktreeSession,
-  WorktreeConfig,
+  BranchComparison,
+  CleanupReport,
   CreateWorktreeOptions,
-  WorktreeFilter,
   DiffOptions,
   DiffResult,
+  DiskUsageReport,
+  GitStatus,
   MergeOptions,
   MergeResult,
   MergeStrategy,
   RemoveOptions,
-  CleanupReport,
-  DiskUsageReport,
   ValidationResult,
+  WorktreeConfig,
   WorktreeEventUnion,
-  GitStatus,
-  BranchComparison,
-  WorktreeMetadata,
-  WorktreeStatus,
+  WorktreeFilter,
+  WorktreeSession,
 } from "./types";
-import { WorktreeErrorCode, WorktreeErrors } from "./errors";
-import { DEFAULT_WORKTREE_CONFIG } from "./constants";
 import {
-  generateWorktreeId,
-  validatePath,
   formatBranchName,
   formatDiskSize,
+  generateWorktreeId,
+  validatePath,
 } from "./utils";
-import { GitOperations } from "./git-operations";
-import { FilesystemOperations } from "./filesystem-operations";
-import { WorktreeRegistry } from "./registry";
-import { exec } from "child_process";
-import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
@@ -62,7 +61,7 @@ const execAsync = promisify(exec);
  * ```
  */
 export class WorktreeManagerSingleton implements IWorktreeManager {
-  private static instance: WorktreeManagerSingleton | null = null;
+  private static instances: Map<string, WorktreeManagerSingleton> = new Map();
 
   private sessions: Map<string, WorktreeSession> = new Map();
   private config: WorktreeConfig = DEFAULT_WORKTREE_CONFIG;
@@ -90,18 +89,28 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
   }
 
   /**
-   * Get the singleton instance.
+   * Get the singleton instance for a specific repository path.
+   *
+   * Creates a new instance lazily if one doesn't exist for the given path.
+   * Each repository path gets its own singleton instance.
    *
    * @param repositoryPath - Absolute path to git repository
-   * @returns Singleton instance
+   * @returns Singleton instance for the given repository path
    */
   public static getInstance(repositoryPath: string): WorktreeManagerSingleton {
-    if (!WorktreeManagerSingleton.instance) {
-      WorktreeManagerSingleton.instance = new WorktreeManagerSingleton(
-        repositoryPath,
+    // Normalize the path to ensure consistent keys (resolve to absolute path)
+    const normalizedPath = path.resolve(repositoryPath);
+
+    // Check if instance already exists for this path
+    if (!WorktreeManagerSingleton.instances.has(normalizedPath)) {
+      // Lazily create and store a new instance
+      WorktreeManagerSingleton.instances.set(
+        normalizedPath,
+        new WorktreeManagerSingleton(normalizedPath),
       );
     }
-    return WorktreeManagerSingleton.instance;
+
+    return WorktreeManagerSingleton.instances.get(normalizedPath)!;
   }
 
   // =========================================================================
@@ -213,12 +222,34 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     let branchName: string;
     if (options?.branchName) {
       // Validate custom branch name
-      if (!/^[a-zA-Z0-9/_-]+$/.test(options.branchName)) {
-        throw WorktreeErrors.validationFailed(
-          `Invalid branch name: ${options.branchName}`,
-        );
+      const name = options.branchName;
+
+      // Check allowed characters: a-zA-Z0-9, dot, slash, underscore, hyphen
+      if (!/^[a-zA-Z0-9._\/-]+$/.test(name)) {
+        throw WorktreeErrors.validationFailed(`Invalid branch name: ${name}`);
       }
-      branchName = options.branchName;
+
+      // Reject names starting or ending with dot or slash
+      if (
+        name.startsWith(".") ||
+        name.startsWith("/") ||
+        name.endsWith(".") ||
+        name.endsWith("/")
+      ) {
+        throw WorktreeErrors.validationFailed(`Invalid branch name: ${name}`);
+      }
+
+      // Reject consecutive dots or slashes
+      if (name.includes("..") || name.includes("//")) {
+        throw WorktreeErrors.validationFailed(`Invalid branch name: ${name}`);
+      }
+
+      // Reject sequences "/." or "./"
+      if (name.includes("/.") || name.includes("./")) {
+        throw WorktreeErrors.validationFailed(`Invalid branch name: ${name}`);
+      }
+
+      branchName = name;
 
       // Check if branch already exists
       if (await this.gitOps.branchExists(branchName)) {
@@ -372,7 +403,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     // Get git status
@@ -435,7 +466,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     return await this.gitOps.getStatus(session.worktreePath);
@@ -452,7 +483,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     const { ahead, behind } = await this.gitOps.getAheadBehind(
@@ -496,7 +527,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     const previousSessionId = this.currentWorktree;
@@ -578,7 +609,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     // Validate all session IDs exist
     for (const id of sessionIds) {
       if (!this.getWorktree(id)) {
-        throw WorktreeErrors.worktreeNotFound(id);
+        throw WorktreeErrors.notFound(id);
       }
     }
 
@@ -618,7 +649,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     // Determine target branch
@@ -717,7 +748,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     const target = targetBranch || session.parentBranch;
@@ -754,7 +785,7 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
 
     const session = this.getWorktree(sessionId);
     if (!session) {
-      throw WorktreeErrors.worktreeNotFound(sessionId);
+      throw WorktreeErrors.notFound(sessionId);
     }
 
     // Check for uncommitted changes unless force
@@ -1177,12 +1208,117 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
   }
 
   /**
-   * Run tests in worktree (placeholder implementation).
+   * Run tests in worktree.
+   * Reads package.json to determine the test command, runs it with timeout,
+   * and returns true only if tests pass (exit code 0).
    */
   private async runTests(worktreePath: string): Promise<boolean> {
-    // TODO: Implement actual test running
-    // This would typically run npm test or similar
-    // For now, just return true
-    return true;
+    const TEST_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes default timeout
+    const packageJsonPath = path.join(worktreePath, "package.json");
+
+    // Determine test command
+    let testCommand: string;
+    let testArgs: string[] = [];
+
+    try {
+      const packageJsonContent = await fs.readFile(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(packageJsonContent);
+      const testScript = packageJson.scripts?.test;
+
+      if (testScript) {
+        // Use npm run to execute the script from package.json
+        testCommand = "npm";
+        testArgs = ["run", "test"];
+      } else {
+        // Fallback to npm test
+        testCommand = "npm";
+        testArgs = ["test"];
+      }
+    } catch (error) {
+      // If package.json doesn't exist or is invalid, fallback to npm test
+      testCommand = "npm";
+      testArgs = ["test"];
+    }
+
+    return new Promise<boolean>((resolve) => {
+      const child = spawn(testCommand, testArgs, {
+        cwd: worktreePath,
+        shell: true,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      let stdout = "";
+      let stderr = "";
+      let timeoutId: NodeJS.Timeout;
+      let isResolved = false;
+
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      // Set timeout
+      timeoutId = setTimeout(() => {
+        if (isResolved) return;
+        isResolved = true;
+        cleanup();
+        child.kill("SIGTERM");
+
+        // Give it a moment, then force kill
+        setTimeout(() => {
+          if (!child.killed) {
+            child.kill("SIGKILL");
+          }
+        }, 1000);
+
+        const output = `Test command timed out after ${TEST_TIMEOUT_MS / 1000} seconds.\n\nStdout:\n${stdout}\n\nStderr:\n${stderr}`;
+        console.error(`[WorktreeManager] Tests failed: ${output}`);
+        resolve(false);
+      }, TEST_TIMEOUT_MS);
+
+      // Capture stdout
+      child.stdout?.on("data", (data: Buffer) => {
+        const text = data.toString();
+        stdout += text;
+        // Stream output in real-time for visibility
+        process.stdout.write(text);
+      });
+
+      // Capture stderr
+      child.stderr?.on("data", (data: Buffer) => {
+        const text = data.toString();
+        stderr += text;
+        // Stream output in real-time for visibility
+        process.stderr.write(text);
+      });
+
+      // Handle process completion
+      child.on("close", (code) => {
+        if (isResolved) return;
+        isResolved = true;
+        cleanup();
+
+        if (code === 0) {
+          console.log(`[WorktreeManager] Tests passed in ${worktreePath}`);
+          resolve(true);
+        } else {
+          const output = `Test command exited with code ${code}.\n\nStdout:\n${stdout}\n\nStderr:\n${stderr}`;
+          console.error(`[WorktreeManager] Tests failed: ${output}`);
+          resolve(false);
+        }
+      });
+
+      // Handle spawn errors
+      child.on("error", (error) => {
+        if (isResolved) return;
+        isResolved = true;
+        cleanup();
+
+        const output = `Failed to spawn test command: ${error.message}\n\nCommand: ${testCommand} ${testArgs.join(" ")}`;
+        console.error(`[WorktreeManager] Tests failed: ${output}`);
+        resolve(false);
+      });
+    });
   }
 }

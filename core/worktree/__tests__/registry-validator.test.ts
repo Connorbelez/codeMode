@@ -50,11 +50,17 @@ describe("validateRegistry", () => {
     mockFsOps.exists.mockResolvedValue(true);
     mockGitOps.branchExists.mockResolvedValue(true);
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(2);
     expect(report.orphaned).toHaveLength(0);
     expect(report.warnings).toHaveLength(0);
+    expect(cleanedSessions.size).toBe(2);
+    // Verify original map is not mutated
     expect(sessions.size).toBe(2);
   });
 
@@ -72,15 +78,23 @@ describe("validateRegistry", () => {
     });
     mockGitOps.branchExists.mockResolvedValue(true);
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(1);
     expect(report.valid[0].id).toBe("wt-1");
     expect(report.orphaned).toContain("wt-2");
     expect(report.warnings.length).toBeGreaterThan(0);
-    expect(sessions.size).toBe(1);
+    expect(cleanedSessions.size).toBe(1);
+    expect(cleanedSessions.has("wt-1")).toBe(true);
+    expect(cleanedSessions.has("wt-2")).toBe(false);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(2);
     expect(sessions.has("wt-1")).toBe(true);
-    expect(sessions.has("wt-2")).toBe(false);
+    expect(sessions.has("wt-2")).toBe(true);
   });
 
   it("removes sessions with non-existent branches", async () => {
@@ -97,13 +111,19 @@ describe("validateRegistry", () => {
       return branchName.includes("wt-1");
     });
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(1);
     expect(report.valid[0].id).toBe("wt-1");
     expect(report.orphaned).toContain("wt-2");
     expect(report.warnings.length).toBeGreaterThan(0);
-    expect(sessions.size).toBe(1);
+    expect(cleanedSessions.size).toBe(1);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(2);
   });
 
   it("removes sessions when branch check throws error", async () => {
@@ -115,24 +135,37 @@ describe("validateRegistry", () => {
       new Error("Git operation failed"),
     );
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(0);
     expect(report.orphaned).toContain("wt-error");
     expect(
       report.warnings.some((w) => w.includes("Git operation failed")),
     ).toBe(true);
-    expect(sessions.size).toBe(0);
+    expect(cleanedSessions.size).toBe(0);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(1);
   });
 
   it("handles empty session map", async () => {
     const sessions = new Map<string, WorktreeSession>();
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(0);
     expect(report.orphaned).toHaveLength(0);
     expect(report.warnings).toHaveLength(0);
+    expect(cleanedSessions.size).toBe(0);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(0);
   });
 
   it("removes all sessions if all are invalid", async () => {
@@ -148,12 +181,18 @@ describe("validateRegistry", () => {
     mockFsOps.exists.mockResolvedValue(false);
     mockGitOps.branchExists.mockResolvedValue(false);
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.valid).toHaveLength(0);
     expect(report.orphaned).toHaveLength(3);
     expect(report.warnings.length).toBe(3);
-    expect(sessions.size).toBe(0);
+    expect(cleanedSessions.size).toBe(0);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(3);
   });
 
   it("generates warning messages with session details", async () => {
@@ -162,10 +201,17 @@ describe("validateRegistry", () => {
 
     mockFsOps.exists.mockResolvedValue(false);
 
-    const report = await validateRegistry(sessions, mockGitOps, mockFsOps);
+    const { report, cleanedSessions } = await validateRegistry(
+      sessions,
+      mockGitOps,
+      mockFsOps,
+    );
 
     expect(report.warnings[0]).toContain("wt-test");
     expect(report.warnings[0]).toContain("Worktree path does not exist");
     expect(report.warnings[0]).toContain(session.worktreePath);
+    // Verify original map is not mutated
+    expect(sessions.size).toBe(1);
+    expect(cleanedSessions.size).toBe(0);
   });
 });

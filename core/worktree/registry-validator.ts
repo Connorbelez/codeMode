@@ -4,8 +4,8 @@
  * Validates worktree sessions loaded from registry and removes orphaned entries.
  */
 
+import type { IFilesystemOperations, IGitOperations } from "./api";
 import type { WorktreeSession } from "./types";
-import type { IGitOperations, IFilesystemOperations } from "./api";
 
 export interface ValidationReport {
   /** Sessions that passed validation */
@@ -25,16 +25,20 @@ export interface ValidationReport {
  * - Worktree path exists on filesystem
  * - Branch exists in git
  *
- * Removes orphaned entries and returns report.
+ * Returns a cleaned map with orphaned entries removed and a validation report.
  */
 export async function validateRegistry(
   sessions: Map<string, WorktreeSession>,
   gitOps: IGitOperations,
   fsOps: IFilesystemOperations,
-): Promise<ValidationReport> {
+): Promise<{
+  report: ValidationReport;
+  cleanedSessions: Map<string, WorktreeSession>;
+}> {
   const valid: WorktreeSession[] = [];
   const orphaned: string[] = [];
   const warnings: string[] = [];
+  const cleanedSessions = new Map(sessions);
 
   for (const [id, session] of sessions.entries()) {
     let isValid = true;
@@ -72,8 +76,8 @@ export async function validateRegistry(
     if (isValid) {
       valid.push(session);
     } else {
-      // Remove orphaned entry from map
-      sessions.delete(id);
+      // Remove orphaned entry from cleaned map
+      cleanedSessions.delete(id);
     }
   }
 
@@ -86,8 +90,11 @@ export async function validateRegistry(
   }
 
   return {
-    valid,
-    orphaned,
-    warnings,
+    report: {
+      valid,
+      orphaned,
+      warnings,
+    },
+    cleanedSessions,
   };
 }

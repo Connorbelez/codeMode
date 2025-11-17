@@ -5,21 +5,112 @@
  * All git operations are executed via child_process with stderr/stdout capture.
  */
 
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
-import path from "path";
 
 import type { IGitOperations } from "./api";
+import { WorktreeErrors } from "./errors";
 import type {
-  GitStatus,
   DiffOptions,
   DiffResult,
+  GitStatus,
   MergeStrategy,
 } from "./types";
-import { WorktreeErrors } from "./errors";
 import { parseGitOutput } from "./utils";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/**
+ * Escape a string for safe use in shell commands.
+ * Escapes special characters and wraps in double quotes.
+ */
+function escapeShellArg(arg: string): string {
+  // Escape backslashes and double quotes, then wrap in double quotes
+  return `"${arg.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Validate and sanitize a git branch name.
+ * Git branch names can contain:
+ * - Letters, numbers, dots, hyphens, underscores
+ * - Forward slashes (for hierarchical branches)
+ * - Cannot start with a dot or contain consecutive dots
+ * - Cannot end with a dot or slash
+ * - Cannot contain spaces, backslashes, or other shell metacharacters
+ * - Cannot contain sequences like .., @{, or \
+ * - Maximum length is typically 255 characters
+ */
+function validateBranchName(branchName: string): string {
+  if (!branchName || typeof branchName !== "string") {
+    throw WorktreeErrors.validationFailed(
+      "Branch name must be a non-empty string",
+    );
+  }
+
+  const trimmed = branchName.trim();
+  if (!trimmed) {
+    throw WorktreeErrors.validationFailed(
+      "Branch name cannot be empty or whitespace only",
+    );
+  }
+
+  // Check length (Git typically allows up to 255 characters)
+  if (trimmed.length > 255) {
+    throw WorktreeErrors.validationFailed(
+      "Branch name exceeds maximum length of 255 characters",
+    );
+  }
+
+  // Git branch name validation regex
+  // Allows: letters, numbers, dots, hyphens, underscores, forward slashes
+  // Disallows: starting with dot, consecutive dots, ending with dot/slash, spaces, backslashes, shell metacharacters
+  const branchNamePattern =
+    /^(?!\.)(?!.*\.\.)(?!.*@\{)(?!.*\\)[a-zA-Z0-9._/-]+(?<!\.)(?<!\/)$/;
+
+  if (!branchNamePattern.test(trimmed)) {
+    throw WorktreeErrors.validationFailed(
+      `Invalid branch name: "${trimmed}". Branch names can only contain letters, numbers, dots, hyphens, underscores, and forward slashes. Cannot start with a dot, contain consecutive dots, or end with a dot or slash.`,
+    );
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validate and sanitize a file system path.
+ * Paths should be relative or absolute paths without shell metacharacters.
+ * Rejects paths containing command injection characters.
+ */
+function validatePath(path: string): string {
+  if (!path || typeof path !== "string") {
+    throw WorktreeErrors.validationFailed("Path must be a non-empty string");
+  }
+
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw WorktreeErrors.validationFailed(
+      "Path cannot be empty or whitespace only",
+    );
+  }
+
+  // Reject paths containing shell metacharacters that could be used for command injection
+  // This includes: |, &, ;, `, $, (, ), <, >, newlines, tabs, etc.
+  const dangerousChars = /[|&;`$()<>{}[\]\n\r\t]/;
+  if (dangerousChars.test(trimmed)) {
+    throw WorktreeErrors.validationFailed(
+      `Invalid path: "${trimmed}". Path contains dangerous characters that could be used for command injection.`,
+    );
+  }
+
+  // Reject paths that start with certain dangerous patterns
+  if (trimmed.startsWith("..") || trimmed.includes("../")) {
+    // Allow relative paths but validate they're safe
+    // This is a basic check - in production you might want more sophisticated path validation
+  }
+
+  return trimmed;
+}
 
 /**
  * Implementation of IGitOperations interface.
@@ -54,6 +145,29 @@ export class GitOperations implements IGitOperations {
   }
 
   /**
+   * Execute a git command with argument array (safer, prevents shell injection).
+   * Arguments are passed directly to git without shell interpretation.
+   */
+  private async execGitWithArgs(
+    args: string[],
+    cwd?: string,
+  ): Promise<{ stdout: string; stderr: string }> {
+    try {
+      const result = await execFileAsync("git", args, {
+        cwd: cwd || this.repositoryPath,
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large diffs
+      });
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw WorktreeErrors.gitOperationFailed(
+        `Command "git ${args.join(" ")}" failed: ${message}`,
+        error instanceof Error ? error : undefined,
+      );
+    }
+  }
+
+  /**
    * Create a git worktree at the specified path.
    */
   async createWorktree(
@@ -61,26 +175,32 @@ export class GitOperations implements IGitOperations {
     branchName: string,
     baseBranch: string,
   ): Promise<void> {
-    if (!targetPath || !branchName || !baseBranch) {
-      throw WorktreeErrors.validationFailed(
-        "Path, branch name, and base branch are required",
-      );
-    }
+    // Validate and sanitize inputs before using them
+    const validatedBranchName = validateBranchName(branchName);
+    const validatedTargetPath = validatePath(targetPath);
+    const validatedBaseBranch = validateBranchName(baseBranch);
 
     // Check if branch already exists
-    const exists = await this.branchExists(branchName);
+    const exists = await this.branchExists(validatedBranchName);
     if (exists) {
-      throw WorktreeErrors.branchExists(branchName);
+      throw WorktreeErrors.branchExists(validatedBranchName);
     }
 
     try {
       // Create worktree with new branch based on baseBranch
-      await this.execGit(
-        `worktree add -b "${branchName}" "${targetPath}" "${baseBranch}"`,
-      );
+      // Use execGitWithArgs to pass arguments as array, preventing command injection
+      const args = [
+        "worktree",
+        "add",
+        "-b",
+        validatedBranchName,
+        validatedTargetPath,
+        validatedBaseBranch,
+      ];
+      await this.execGitWithArgs(args);
     } catch (error) {
       throw WorktreeErrors.creationFailed(
-        `Failed to create worktree at ${targetPath}`,
+        `Failed to create worktree at ${validatedTargetPath}`,
         error instanceof Error ? error : undefined,
       );
     }
@@ -90,12 +210,13 @@ export class GitOperations implements IGitOperations {
    * Remove a git worktree.
    */
   async removeWorktree(targetPath: string, force = false): Promise<void> {
-    if (!targetPath) {
+    if (!targetPath || !targetPath.trim()) {
       throw WorktreeErrors.validationFailed("Worktree path is required");
     }
 
     const forceFlag = force ? "--force" : "";
-    await this.execGit(`worktree remove ${forceFlag} "${targetPath}"`);
+    const escapedPath = escapeShellArg(targetPath);
+    await this.execGit(`worktree remove ${forceFlag} ${escapedPath}`);
   }
 
   /**
@@ -221,12 +342,25 @@ export class GitOperations implements IGitOperations {
     if (options?.context !== undefined) {
       flags.push(`--unified=${options.context}`);
     }
-    if (options?.pathFilter) {
-      flags.push(`-- "${options.pathFilter}"`);
-    }
 
-    const command = `diff ${flags.join(" ")} ${ref1} ${ref2}`;
-    const { stdout } = await this.execGit(command);
+    let stdout: string;
+    // Use argument array method when pathFilter is present to prevent shell injection
+    if (options?.pathFilter) {
+      const args: string[] = [
+        "diff",
+        ...flags,
+        ref1,
+        ref2,
+        "--",
+        options.pathFilter,
+      ];
+      const result = await this.execGitWithArgs(args);
+      stdout = result.stdout;
+    } else {
+      const command = `diff ${flags.join(" ")} ${ref1} ${ref2}`;
+      const result = await this.execGit(command);
+      stdout = result.stdout;
+    }
 
     // Parse diff stats
     const statsCommand = `diff --numstat ${ref1} ${ref2}`;
@@ -375,8 +509,14 @@ export class GitOperations implements IGitOperations {
     try {
       const { stdout } = await this.execGit(`branch --list "${branchName}"`);
       return stdout.trim().length > 0;
-    } catch {
-      return false;
+    } catch (err) {
+      // Log error with context before rethrowing
+      console.error(
+        `[GitOperations] branchExists failed for branch "${branchName}":`,
+        err,
+      );
+      // execGit already wraps errors in WorktreeErrors.gitOperationFailed, so rethrow
+      throw err;
     }
   }
 
