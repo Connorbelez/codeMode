@@ -233,17 +233,17 @@ The agent writes TypeScript code that executes in the sandbox, filtering and pro
 
 ```mermaid
 flowchart LR
-    MCP[MCP Servers<br/>GitHub, Filesystem, etc.]
+    MCP[MCP Servers<br>GitHub, Filesystem, etc.]
 
-    GEN[Code Generator<br/>JSON Schema → TypeScript]
+    GEN[Code Generator<br>JSON Schema → TypeScript]
 
-    VFS[Virtual Filesystem<br/>/mcp/github/*.ts<br/>/mcp/filesystem/*.ts]
+    VFS[Virtual Filesystem<br>/mcp/github/*.ts<br>/mcp/filesystem/*.ts]
 
-    AGENT[AI Agent<br/>Writes TypeScript]
+    AGENT[AI Agent<br>Writes TypeScript]
 
-    SANDBOX[E2B Sandbox<br/>Executes code safely]
+    SANDBOX[E2B Sandbox<br>Executes code safely]
 
-    IPC[File-based IPC<br/>Sandbox ↔ Host]
+    IPC[File-based IPC<br>Sandbox ↔ Host]
 
     MCP -->|Tool schemas| GEN
     GEN -->|Generated .ts files| VFS
