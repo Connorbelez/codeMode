@@ -10,7 +10,6 @@ test("searchWeb tool is only available when user is signed in", () => {
     isSignedIn: true,
     isRemote: false,
     modelName: "",
-    testVal: "test",
   });
 
   const searchWebToolSignedIn = signedInTools.find(
@@ -26,7 +25,6 @@ test("searchWeb tool is only available when user is signed in", () => {
     isSignedIn: false,
     isRemote: false,
     modelName: "",
-    testVal: "test",
   });
 
   const searchWebToolNotSignedIn = notSignedInTools.find(
