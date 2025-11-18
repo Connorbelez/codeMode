@@ -1,5 +1,5 @@
 /**
- * Unit tests for LspMcpBridge - the bridge between Code Mode sandbox and VS Code LSP providers.
+ * Unit tests for LspMcpBridge - the bridge between CodeModo sandbox and VS Code LSP providers.
  *
  * Tests cover:
  * - All 6 LSP operations (getDefinition, findReferences, getHover, getDiagnostics, getDocumentSymbols, getWorkspaceSymbols)

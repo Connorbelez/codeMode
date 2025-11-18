@@ -210,13 +210,24 @@ export class GitOperations implements IGitOperations {
    * Remove a git worktree.
    */
   async removeWorktree(targetPath: string, force = false): Promise<void> {
-    if (!targetPath || !targetPath.trim()) {
-      throw WorktreeErrors.validationFailed("Worktree path is required");
-    }
+    // Validate and sanitize input before using it
+    const validatedPath = validatePath(targetPath);
 
-    const forceFlag = force ? "--force" : "";
-    const escapedPath = escapeShellArg(targetPath);
-    await this.execGit(`worktree remove ${forceFlag} ${escapedPath}`);
+    try {
+      // Use execGitWithArgs to pass arguments as array, preventing command injection
+      const args = [
+        "worktree",
+        "remove",
+        ...(force ? ["--force"] : []),
+        validatedPath,
+      ];
+      await this.execGitWithArgs(args);
+    } catch (error) {
+      throw WorktreeErrors.gitOperationFailed(
+        `Failed to remove worktree at ${validatedPath}`,
+        error instanceof Error ? error : undefined,
+      );
+    }
   }
 
   /**
@@ -343,28 +354,17 @@ export class GitOperations implements IGitOperations {
       flags.push(`--unified=${options.context}`);
     }
 
-    let stdout: string;
-    // Use argument array method when pathFilter is present to prevent shell injection
+    // Use argument array method to prevent shell injection
+    const args: string[] = ["diff", ...flags, ref1, ref2];
     if (options?.pathFilter) {
-      const args: string[] = [
-        "diff",
-        ...flags,
-        ref1,
-        ref2,
-        "--",
-        options.pathFilter,
-      ];
-      const result = await this.execGitWithArgs(args);
-      stdout = result.stdout;
-    } else {
-      const command = `diff ${flags.join(" ")} ${ref1} ${ref2}`;
-      const result = await this.execGit(command);
-      stdout = result.stdout;
+      args.push("--", options.pathFilter);
     }
+    const result = await this.execGitWithArgs(args);
+    const stdout = result.stdout;
 
-    // Parse diff stats
-    const statsCommand = `diff --numstat ${ref1} ${ref2}`;
-    const { stdout: statsOutput } = await this.execGit(statsCommand);
+    // Parse diff stats using argument array
+    const statsArgs = ["diff", "--numstat", ref1, ref2];
+    const { stdout: statsOutput } = await this.execGitWithArgs(statsArgs);
 
     let additions = 0;
     let deletions = 0;
@@ -396,6 +396,10 @@ export class GitOperations implements IGitOperations {
 
   /**
    * Perform merge operation.
+   *
+   * Merges the specified branch into the current HEAD in the given cwd.
+   * Note: This method operates on whatever branch is currently checked out.
+   * For merging sourceBranch into targetBranch, ensure targetBranch is checked out first.
    */
   async merge(
     branch: string,
@@ -404,50 +408,92 @@ export class GitOperations implements IGitOperations {
       message?: string;
       noCommit?: boolean;
       cwd?: string;
+      targetBranch?: string; // Optional: ensure this branch is checked out before merging
     },
   ): Promise<{ success: boolean; conflicts?: string[] }> {
-    if (!branch) {
-      throw WorktreeErrors.validationFailed(
-        "Branch name is required for merge",
-      );
-    }
+    // Validate branch name to prevent command injection
+    const validatedBranch = validateBranchName(branch);
 
-    const flags: string[] = [];
+    const cwd = options?.cwd || this.repositoryPath;
 
-    switch (strategy) {
-      case "merge":
-        // Default merge commit
-        break;
-      case "squash":
-        flags.push("--squash");
-        break;
-      case "rebase":
-        // Rebase is a different command
-        try {
-          await this.execGit(`rebase ${branch}`, options?.cwd);
-          return { success: true };
-        } catch (error) {
-          const conflicts = await this.getConflictedFiles(options?.cwd);
-          return { success: false, conflicts };
+    // If targetBranch is specified, ensure it's checked out
+    let originalBranch: string | undefined;
+    if (options?.targetBranch) {
+      const validatedTarget = validateBranchName(options.targetBranch);
+      try {
+        originalBranch = await this.getCurrentBranch(cwd);
+        if (originalBranch !== validatedTarget) {
+          await this.checkoutBranch(validatedTarget, cwd);
         }
-      case "fast-forward":
-        flags.push("--ff-only");
-        break;
-    }
-
-    if (options?.message) {
-      flags.push(`-m "${options.message}"`);
-    }
-    if (options?.noCommit) {
-      flags.push("--no-commit");
+      } catch (error) {
+        // If we can't determine current branch, try to checkout target anyway
+        try {
+          await this.checkoutBranch(validatedTarget, cwd);
+        } catch (checkoutError) {
+          throw WorktreeErrors.gitOperationFailed(
+            `Failed to checkout target branch ${validatedTarget} for merge`,
+            checkoutError instanceof Error ? checkoutError : undefined,
+          );
+        }
+      }
     }
 
     try {
-      await this.execGit(`merge ${flags.join(" ")} ${branch}`, options?.cwd);
-      return { success: true };
-    } catch (error) {
-      const conflicts = await this.getConflictedFiles(options?.cwd);
-      return { success: false, conflicts };
+      switch (strategy) {
+        case "rebase":
+          // Rebase is a different command - use argument array
+          try {
+            await this.execGitWithArgs(["rebase", validatedBranch], cwd);
+            return { success: true };
+          } catch (error) {
+            const conflicts = await this.getConflictedFiles(cwd);
+            return { success: false, conflicts };
+          }
+        case "merge":
+        case "squash":
+        case "fast-forward": {
+          const args: string[] = ["merge"];
+
+          if (strategy === "squash") {
+            args.push("--squash");
+          } else if (strategy === "fast-forward") {
+            args.push("--ff-only");
+          }
+
+          // Add message as separate arguments to prevent shell injection
+          if (options?.message) {
+            args.push("-m", options.message);
+          }
+          if (options?.noCommit) {
+            args.push("--no-commit");
+          }
+
+          args.push(validatedBranch);
+
+          try {
+            await this.execGitWithArgs(args, cwd);
+            return { success: true };
+          } catch (error) {
+            const conflicts = await this.getConflictedFiles(cwd);
+            return { success: false, conflicts };
+          }
+        }
+      }
+    } finally {
+      // Restore original branch if we changed it
+      if (originalBranch && options?.targetBranch) {
+        const validatedTarget = validateBranchName(options.targetBranch);
+        if (originalBranch !== validatedTarget) {
+          try {
+            await this.checkoutBranch(originalBranch, cwd);
+          } catch {
+            // Log but don't throw - merge may have succeeded
+            console.warn(
+              `[GitOperations] Failed to restore original branch ${originalBranch} after merge`,
+            );
+          }
+        }
+      }
     }
   }
 
@@ -456,8 +502,9 @@ export class GitOperations implements IGitOperations {
    */
   private async getConflictedFiles(cwd?: string): Promise<string[]> {
     try {
-      const { stdout } = await this.execGit(
-        "diff --name-only --diff-filter=U",
+      // Use argument array to prevent shell injection
+      const { stdout } = await this.execGitWithArgs(
+        ["diff", "--name-only", "--diff-filter=U"],
         cwd,
       );
       return stdout
@@ -476,19 +523,23 @@ export class GitOperations implements IGitOperations {
     branch1: string,
     branch2: string,
   ): Promise<{ ahead: number; behind: number }> {
-    if (!branch1 || !branch2) {
-      throw WorktreeErrors.validationFailed(
-        "Both branch names are required for comparison",
-      );
-    }
+    // Validate branch names to prevent command injection
+    const validatedBranch1 = validateBranchName(branch1);
+    const validatedBranch2 = validateBranchName(branch2);
 
     try {
-      const { stdout: aheadOutput } = await this.execGit(
-        `rev-list --count ${branch2}..${branch1}`,
-      );
-      const { stdout: behindOutput } = await this.execGit(
-        `rev-list --count ${branch1}..${branch2}`,
-      );
+      // Use argument arrays to prevent shell injection
+      // Note: The ".." syntax is part of the rev-list range, passed as a single argument
+      const { stdout: aheadOutput } = await this.execGitWithArgs([
+        "rev-list",
+        "--count",
+        `${validatedBranch2}..${validatedBranch1}`,
+      ]);
+      const { stdout: behindOutput } = await this.execGitWithArgs([
+        "rev-list",
+        "--count",
+        `${validatedBranch1}..${validatedBranch2}`,
+      ]);
 
       return {
         ahead: parseInt(aheadOutput.trim(), 10) || 0,
@@ -496,7 +547,7 @@ export class GitOperations implements IGitOperations {
       };
     } catch (error) {
       throw WorktreeErrors.gitOperationFailed(
-        `Failed to compare branches ${branch1} and ${branch2}`,
+        `Failed to compare branches ${validatedBranch1} and ${validatedBranch2}`,
         error instanceof Error ? error : undefined,
       );
     }
@@ -506,20 +557,24 @@ export class GitOperations implements IGitOperations {
    * Check if a branch exists.
    */
   async branchExists(branchName: string): Promise<boolean> {
-    if (!branchName) {
-      throw WorktreeErrors.validationFailed("Branch name is required");
-    }
+    // Validate branch name to prevent command injection
+    const validatedBranch = validateBranchName(branchName);
 
     try {
-      const { stdout } = await this.execGit(`branch --list "${branchName}"`);
+      // Use argument array to prevent shell injection
+      const { stdout } = await this.execGitWithArgs([
+        "branch",
+        "--list",
+        validatedBranch,
+      ]);
       return stdout.trim().length > 0;
     } catch (err) {
       // Log error with context before rethrowing
       console.error(
-        `[GitOperations] branchExists failed for branch "${branchName}":`,
+        `[GitOperations] branchExists failed for branch "${validatedBranch}":`,
         err,
       );
-      // execGit already wraps errors in WorktreeErrors.gitOperationFailed, so rethrow
+      // execGitWithArgs already wraps errors in WorktreeErrors.gitOperationFailed, so rethrow
       throw err;
     }
   }
@@ -528,20 +583,21 @@ export class GitOperations implements IGitOperations {
    * Delete a branch.
    */
   async deleteBranch(branchName: string, force = false): Promise<void> {
-    if (!branchName) {
-      throw WorktreeErrors.validationFailed("Branch name is required");
-    }
+    // Validate branch name to prevent command injection
+    const validatedBranch = validateBranchName(branchName);
 
+    // Use argument array to prevent shell injection
     const flag = force ? "-D" : "-d";
-    await this.execGit(`branch ${flag} "${branchName}"`);
+    await this.execGitWithArgs(["branch", flag, validatedBranch]);
   }
 
   /**
    * Get current branch name for a worktree.
    */
   async getCurrentBranch(worktreePath?: string): Promise<string> {
-    const { stdout } = await this.execGit(
-      "branch --show-current",
+    // Use argument array to prevent shell injection
+    const { stdout } = await this.execGitWithArgs(
+      ["branch", "--show-current"],
       worktreePath,
     );
     const branch = stdout.trim();
@@ -556,6 +612,22 @@ export class GitOperations implements IGitOperations {
   }
 
   /**
+   * Checkout a branch (without locking, for internal use).
+   *
+   * @param branch - Branch name to checkout
+   * @param cwd - Working directory (default: repositoryPath)
+   * @returns The branch name that was checked out
+   */
+  private async checkoutBranch(branch: string, cwd?: string): Promise<string> {
+    // Validate branch name to prevent command injection
+    const validatedBranch = validateBranchName(branch);
+
+    // Use argument array to prevent shell injection
+    await this.execGitWithArgs(["checkout", validatedBranch], cwd);
+    return validatedBranch;
+  }
+
+  /**
    * Get merge base between two refs.
    */
   async getMergeBase(ref1: string, ref2: string): Promise<string> {
@@ -565,32 +637,64 @@ export class GitOperations implements IGitOperations {
       );
     }
 
-    const { stdout } = await this.execGit(`merge-base ${ref1} ${ref2}`);
+    // Validate refs (they might be branch names or commit hashes)
+    // For branch names, use validateBranchName; for commit hashes, basic validation
+    const validatedRef1 = ref1.match(/^[a-f0-9]{40}$/i)
+      ? ref1
+      : validateBranchName(ref1);
+    const validatedRef2 = ref2.match(/^[a-f0-9]{40}$/i)
+      ? ref2
+      : validateBranchName(ref2);
+
+    // Use argument array to prevent shell injection
+    const { stdout } = await this.execGitWithArgs([
+      "merge-base",
+      validatedRef1,
+      validatedRef2,
+    ]);
     return stdout.trim();
   }
 
   /**
    * Check if merge would have conflicts (dry run).
+   *
+   * Ensures targetBranch is checked out before attempting merge.
+   * Uses git merge-tree for a non-destructive comparison when available,
+   * otherwise performs a temporary merge and aborts it.
    */
   async checkMergeConflicts(
     sourceBranch: string,
     targetBranch: string,
   ): Promise<string[]> {
-    if (!sourceBranch || !targetBranch) {
-      throw WorktreeErrors.validationFailed(
-        "Both source and target branches are required",
-      );
+    // Validate branch names to prevent command injection
+    const validatedSource = validateBranchName(sourceBranch);
+    const validatedTarget = validateBranchName(targetBranch);
+
+    // Get current branch to restore later
+    let originalBranch: string | undefined;
+    try {
+      originalBranch = await this.getCurrentBranch();
+    } catch {
+      // If we can't determine current branch, we'll try to checkout target anyway
+      // This handles detached HEAD state
     }
 
     try {
+      // Ensure target branch is checked out
+      await this.checkoutBranch(validatedTarget);
+
       // Try a merge with --no-commit --no-ff to detect conflicts
-      await this.execGit(
-        `merge --no-commit --no-ff ${sourceBranch} ${targetBranch}`,
-      );
+      // Use argument array to prevent shell injection
+      await this.execGitWithArgs([
+        "merge",
+        "--no-commit",
+        "--no-ff",
+        validatedSource,
+      ]);
 
       // If successful, abort the merge
       try {
-        await this.execGit("merge --abort");
+        await this.execGitWithArgs(["merge", "--abort"]);
       } catch {
         // Ignore abort errors
       }
@@ -602,12 +706,24 @@ export class GitOperations implements IGitOperations {
 
       // Abort the failed merge
       try {
-        await this.execGit("merge --abort");
+        await this.execGitWithArgs(["merge", "--abort"]);
       } catch {
         // Ignore abort errors
       }
 
       return conflicts;
+    } finally {
+      // Restore original branch if we changed it
+      if (originalBranch && originalBranch !== validatedTarget) {
+        try {
+          await this.checkoutBranch(originalBranch);
+        } catch {
+          // Log but don't throw - we've already done the conflict check
+          console.warn(
+            `[GitOperations] Failed to restore original branch ${originalBranch} after conflict check`,
+          );
+        }
+      }
     }
   }
 }

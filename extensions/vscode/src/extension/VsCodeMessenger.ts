@@ -22,6 +22,7 @@ import {
 } from "core/util/sanitization";
 import type { MergeOptions, WorktreeSession } from "core/worktree/types";
 import { WorktreeManagerSingleton } from "core/worktree/WorktreeManagerSingleton";
+import path from "path";
 import * as vscode from "vscode";
 
 import { ApplyManager } from "../apply";
@@ -35,13 +36,10 @@ import {
 import { handleLLMError } from "../util/errorHandling";
 import { showTutorial } from "../util/tutorial";
 import { getExtensionUri } from "../util/vscode";
-import {
-  enrichSessionWithStats,
-  getCurrentRepositoryPath,
-  isGitRepository,
-} from "../util/worktreeHelpers";
+import { enrichSessionWithStats } from "../util/worktreeHelpers";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
+import { WorktreeWorkspaceManager } from "../worktree/WorkspaceManager";
 
 import { encodeFullSlug } from "../../../../packages/config-yaml/dist";
 import { VsCodeExtension } from "./VsCodeExtension";
@@ -55,6 +53,7 @@ type ToIdeOrWebviewFromCoreProtocol = ToIdeFromCoreProtocol &
  */
 export class VsCodeMessenger {
   private readonly worktreeEventRepos = new Set<string>();
+  private readonly workspaceManager: WorktreeWorkspaceManager;
   onWebview<T extends keyof FromWebviewProtocol>(
     messageType: T,
     handler: (
@@ -101,6 +100,7 @@ export class VsCodeMessenger {
     private readonly context: vscode.ExtensionContext,
     private readonly vsCodeExtension: VsCodeExtension,
   ) {
+    this.workspaceManager = new WorktreeWorkspaceManager(context);
     /** WEBVIEW ONLY LISTENERS **/
     this.onWebview("showFile", (msg) => {
       this.ide.openFile(msg.data.filepath);
@@ -851,7 +851,10 @@ export class VsCodeMessenger {
         const enriched = await Promise.all(
           sessions.map((session) => enrichSessionWithStats(session, manager)),
         );
-        return enriched;
+        const activePath = this.workspaceManager.getActiveWorktreePath();
+        return enriched.map((session) =>
+          this.annotateActiveState(session, activePath),
+        );
       });
     });
 
@@ -886,10 +889,33 @@ export class VsCodeMessenger {
         if (!session) {
           throw new Error(`Worktree session ${data.sessionId} not found`);
         }
-        const uri = vscode.Uri.file(session.worktreePath);
-        await vscode.commands.executeCommand("vscode.openFolder", uri, {
-          forceNewWindow: data.openInNewWindow ?? false,
-        });
+        if (data.openInNewWindow) {
+          const uri = vscode.Uri.file(session.worktreePath);
+          await vscode.commands.executeCommand("vscode.openFolder", uri, {
+            forceNewWindow: true,
+          });
+          return;
+        }
+
+        await this.workspaceManager.activateWorktree(session.worktreePath);
+        void this.emitWorktreeUpdate(manager, session);
+      });
+    });
+
+    this.onWebview("worktree/resetActive", async ({ data }) => {
+      return this.withWorktreeManager(data?.repositoryPath, async (manager) => {
+        const previous = await this.workspaceManager.resetActiveWorktree();
+        if (previous) {
+          const session = manager
+            .listWorktrees()
+            .find(
+              (entry) =>
+                path.resolve(entry.worktreePath) === path.resolve(previous),
+            );
+          if (session) {
+            void this.emitWorktreeUpdate(manager, session);
+          }
+        }
       });
     });
 
@@ -932,16 +958,11 @@ export class VsCodeMessenger {
     repositoryPath: string | undefined,
     fn: (manager: WorktreeManagerSingleton, repoPath: string) => Promise<T> | T,
   ): Promise<T> {
-    const repoPath = repositoryPath ?? getCurrentRepositoryPath();
+    const repoPath =
+      await this.workspaceManager.resolveRepositoryPath(repositoryPath);
     if (!repoPath) {
       throw new Error(
         "Worktree launch requires a Git repository. Open Continue in a project folder that contains a .git directory and try again.",
-      );
-    }
-
-    if (!isGitRepository(repoPath)) {
-      throw new Error(
-        `Worktree launch requires a Git repository, but the current workspace ("${repoPath}") isn't one. Open Continue inside your repo or provide a repositoryPath when calling worktree APIs.`,
       );
     }
 
@@ -1002,7 +1023,21 @@ export class VsCodeMessenger {
     manager: WorktreeManagerSingleton,
     session: WorktreeSession,
   ): Promise<void> {
-    const enriched = await enrichSessionWithStats(session, manager);
+    const enriched = this.annotateActiveState(
+      await enrichSessionWithStats(session, manager),
+    );
     this.webviewProtocol.send("worktree/statusUpdate", enriched);
+  }
+
+  private annotateActiveState<T extends { worktreePath: string }>(
+    session: T,
+    activePath = this.workspaceManager.getActiveWorktreePath(),
+  ): T & { isActive?: boolean } {
+    if (!activePath) {
+      return session;
+    }
+    const isActive =
+      path.resolve(session.worktreePath) === path.resolve(activePath);
+    return isActive ? { ...session, isActive } : session;
   }
 }

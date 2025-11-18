@@ -2,14 +2,14 @@
  * Type definitions for the Worktree Management System
  *
  * This module defines all types, interfaces, and enums used in the
- * git worktree management feature for Code Mode agent sessions.
+ * git worktree management feature for CodeModo agent sessions.
  *
  * @module core/worktree/types
  */
 
 import type { WorktreeError } from "./errors";
+export { isWorktreeError, WorktreeErrorCode, WorktreeErrors } from "./errors";
 export type { WorktreeError } from "./errors";
-export { WorktreeErrorCode, WorktreeErrors, isWorktreeError } from "./errors";
 
 // ============================================================================
 // Core Session Types

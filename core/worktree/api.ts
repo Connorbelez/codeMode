@@ -2,28 +2,28 @@
  * API Specification for Worktree Management System
  *
  * This module defines the public API interfaces for managing git worktrees
- * in Code Mode. All worktree operations should go through these interfaces.
+ * in CodeModo. All worktree operations should go through these interfaces.
  *
  * @module core/worktree/api
  */
 
 import type {
-  WorktreeSession,
-  WorktreeConfig,
+  BranchComparison,
+  CleanupReport,
   CreateWorktreeOptions,
-  WorktreeFilter,
   DiffOptions,
   DiffResult,
+  DiskUsageReport,
+  GitStatus,
   MergeOptions,
   MergeResult,
   MergeStrategy,
   RemoveOptions,
-  CleanupReport,
-  DiskUsageReport,
   ValidationResult,
+  WorktreeConfig,
   WorktreeEventUnion,
-  GitStatus,
-  BranchComparison,
+  WorktreeFilter,
+  WorktreeSession,
 } from "./types";
 
 // ============================================================================
@@ -726,13 +726,22 @@ export interface IWorktreeLifecycleHooks {
 export interface IWorktreeRegistry {
   /**
    * Load registry from disk.
+   * @returns Map of sessions and the persisted config (or undefined if not present)
    */
-  load(): Promise<Map<string, WorktreeSession>>;
+  load(): Promise<{
+    sessions: Map<string, WorktreeSession>;
+    config?: WorktreeConfig;
+  }>;
 
   /**
    * Save registry to disk.
+   * @param sessions - Map of sessions to save
+   * @param config - Configuration to persist (optional, uses stored config if not provided)
    */
-  save(sessions: Map<string, WorktreeSession>): Promise<void>;
+  save(
+    sessions: Map<string, WorktreeSession>,
+    config?: WorktreeConfig,
+  ): Promise<void>;
 
   /**
    * Add or update session in registry.
@@ -760,19 +769,19 @@ export interface IWorktreeRegistry {
 // ============================================================================
 
 export type {
-  // Re-export types from types.ts for convenience
-  WorktreeSession,
-  WorktreeConfig,
+  BranchComparison,
+  CleanupReport,
   CreateWorktreeOptions,
-  WorktreeFilter,
   DiffOptions,
   DiffResult,
+  DiskUsageReport,
+  GitStatus,
   MergeOptions,
   MergeResult,
   RemoveOptions,
-  CleanupReport,
-  DiskUsageReport,
   ValidationResult,
-  GitStatus,
-  BranchComparison,
+  WorktreeConfig,
+  WorktreeFilter,
+  // Re-export types from types.ts for convenience
+  WorktreeSession,
 };

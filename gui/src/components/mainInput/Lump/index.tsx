@@ -7,7 +7,7 @@ import { LumpToolbar } from "./LumpToolbar/LumpToolbar";
 export function Lump() {
   return (
     <div
-      className="bg-input border-command-border mx-1.5 border-l border-r border-t"
+      className="mx-1.5 border-l border-r border-t bg-transparent"
       style={{
         borderTopLeftRadius: chatInputBorderRadius,
         borderTopRightRadius: chatInputBorderRadius,

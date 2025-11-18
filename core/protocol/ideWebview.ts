@@ -18,6 +18,7 @@ import type {
   WorktreeCreateRequestPayload,
   WorktreeMergeRequestPayload,
   WorktreeRemoveRequestPayload,
+  WorktreeScopedRequestPayload,
   WorktreeSession,
   WorktreeSessionWithStats,
   WorktreeStatusRequestPayload,
@@ -105,6 +106,7 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   "worktree/switch": [WorktreeSwitchRequestPayload, void];
   "worktree/merge": [WorktreeMergeRequestPayload, void];
   "worktree/remove": [WorktreeRemoveRequestPayload, void];
+  "worktree/resetActive": [WorktreeScopedRequestPayload | undefined, void];
 };
 
 export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {

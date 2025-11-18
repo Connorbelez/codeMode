@@ -8,7 +8,7 @@ import {
 import { LSP_TOOLS } from "./LspToolDefinitions.js";
 
 /**
- * Bridge between Code Mode sandbox and VS Code LSP providers.
+ * Bridge between CodeModo sandbox and VS Code LSP providers.
  * Provides semantic code navigation capabilities to sandbox TypeScript code.
  */
 export class LspMcpBridge {

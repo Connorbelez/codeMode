@@ -9,6 +9,7 @@ import type {
   WorktreeStatus,
 } from "core/worktree/types";
 import { memo, useMemo } from "react";
+import { ToolTip } from "../gui/Tooltip";
 import { Button } from "../ui";
 import { WorktreeDiffStats } from "./WorktreeDiffStats";
 import {
@@ -18,8 +19,12 @@ import {
 
 export type WorktreeActionType = "switch" | "merge" | "remove";
 
+type ExtendedWorktreeSession = WorktreeSessionWithStats & {
+  isActive?: boolean;
+};
+
 interface WorktreeSessionCardProps {
-  session: WorktreeSessionWithStats;
+  session: ExtendedWorktreeSession;
   onSwitch: (session: WorktreeSessionWithStats) => void;
   onMerge: (session: WorktreeSessionWithStats) => void;
   onRemove: (session: WorktreeSessionWithStats) => void;
@@ -71,6 +76,7 @@ function WorktreeSessionCardComponent({
     busyAction?.sessionId === session.id ? busyAction.type : undefined;
 
   const disableAll = Boolean(isBusy);
+  const isActive = Boolean(session.isActive);
 
   return (
     <div className="border-border bg-background text-foreground flex flex-col gap-2 rounded border p-3">
@@ -81,6 +87,11 @@ function WorktreeSessionCardComponent({
             <span className="text-description text-2xs">
               from {session.parentBranch}
             </span>
+            {isActive && (
+              <span className="text-2xs rounded-full border border-green-400/30 bg-green-400/10 px-2 py-0.5 font-medium text-green-400">
+                Active
+              </span>
+            )}
           </div>
           {session.description && (
             <p className="text-description text-xs">{session.description}</p>
@@ -112,16 +123,25 @@ function WorktreeSessionCardComponent({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex items-center gap-1"
-          disabled={disableAll}
-          onClick={() => onSwitch(session)}
+        <ToolTip
+          content={
+            isActive
+              ? "This worktree is currently active"
+              : "Open this worktree in a new VS Code window"
+          }
+          place="top"
         >
-          <ArrowsRightLeftIcon className="h-3.5 w-3.5" />
-          Switch
-        </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex items-center gap-1"
+            disabled={disableAll || isActive}
+            onClick={() => onSwitch(session)}
+          >
+            <ArrowsRightLeftIcon className="h-3.5 w-3.5" />
+            {isActive ? "Active" : "Open"}
+          </Button>
+        </ToolTip>
         <Button
           variant="outline"
           size="sm"

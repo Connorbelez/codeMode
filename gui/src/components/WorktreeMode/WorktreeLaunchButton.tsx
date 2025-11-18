@@ -50,7 +50,7 @@ export function WorktreeLaunchButton({
             type="button"
             role="switch"
             aria-checked={enabled}
-            aria-label="Toggle Launch in Worktree"
+            aria-label="Toggle Launch in Worktree (opens new window)"
             disabled={busy}
             onClick={(e) => {
               e.preventDefault();

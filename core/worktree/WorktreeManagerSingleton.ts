@@ -1,7 +1,7 @@
 /**
  * Worktree Manager Singleton
  *
- * Central coordinator for all git worktree operations in Code Mode.
+ * Central coordinator for all git worktree operations in CodeModo.
  * Implements the singleton pattern to ensure centralized state management
  * and prevent multiple registry instances.
  *
@@ -154,8 +154,20 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     await this.validateGitVersion();
 
     // Load registry from disk
-    const loadedSessions = await this.registry.load();
+    const { sessions: loadedSessions, config: loadedConfig } =
+      await this.registry.load();
     this.sessions = loadedSessions;
+
+    // Restore persisted config if present, merging with provided config
+    if (loadedConfig) {
+      this.config = {
+        ...loadedConfig,
+        ...config,
+        cleanup: { ...loadedConfig.cleanup, ...config?.cleanup },
+        limits: { ...loadedConfig.limits, ...config?.limits },
+        ui: { ...loadedConfig.ui, ...config?.ui },
+      };
+    }
 
     // Validate all loaded worktrees
     await this.validateAllWorktrees();
@@ -173,8 +185,8 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
       return;
     }
 
-    // Save registry to disk
-    await this.registry.save(this.sessions);
+    // Save registry to disk with current config
+    await this.registry.save(this.sessions, this.config);
 
     // Clear event listeners
     this.eventListeners.clear();
@@ -658,11 +670,32 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     const targetBranch = options?.targetBranch || session.parentBranch;
     const strategy = options?.strategy || this.config.ui.defaultMergeStrategy;
 
-    // Check for uncommitted changes unless allowed
-    if (!options?.allowUncommitted) {
-      const status = await this.gitOps.getStatus(session.worktreePath);
-      if (!status.isClean) {
-        throw WorktreeErrors.uncommittedChanges(sessionId);
+    // Check for uncommitted changes and commit them if present
+    const status = await this.gitOps.getStatus(session.worktreePath);
+    if (!status.isClean) {
+      // Stage all uncommitted files
+      await execAsync("git add -A", {
+        cwd: session.worktreePath,
+      });
+
+      // Commit with a default message if no message provided
+      const commitMessage =
+        options?.commitMessage ||
+        `Merge worktree ${session.branchName}: commit uncommitted changes`;
+      try {
+        await execAsync(`git commit -m ${JSON.stringify(commitMessage)}`, {
+          cwd: session.worktreePath,
+        });
+      } catch (error) {
+        // If commit fails (e.g., nothing to commit after staging), that's okay
+        // The worktree might have been cleaned up or changes were already committed
+        // Continue with merge anyway
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        if (!errorMessage.includes("nothing to commit")) {
+          // Re-throw if it's a different error
+          throw error;
+        }
       }
     }
 
@@ -675,9 +708,11 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     }
 
     // Perform merge (against repository root)
+    // Ensure targetBranch is checked out before merging
     const mergeResult = await this.gitOps.merge(session.branchName, strategy, {
       message: options?.commitMessage,
       cwd: this.repositoryPath,
+      targetBranch: targetBranch, // Ensure target branch is checked out
     });
 
     if (!mergeResult.success) {
@@ -1114,8 +1149,8 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
       ui: { ...this.config.ui, ...config.ui },
     };
 
-    // Save to registry
-    await this.registry.save(this.sessions);
+    // Save to registry with updated config
+    await this.registry.save(this.sessions, this.config);
   }
 
   // =========================================================================

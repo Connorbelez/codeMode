@@ -78,7 +78,7 @@ describe("FilesystemOperations", () => {
       const existingDir = path.join(tempDir, "existing");
       await fs.mkdir(existingDir);
 
-      await expect(fsOps.mkdirp(existingDir)).resolves.not.toThrow();
+      await expect(fsOps.mkdirp(existingDir)).resolves.toBeUndefined();
     });
 
     it("throws error for empty path", async () => {
@@ -127,7 +127,7 @@ describe("FilesystemOperations", () => {
     it("succeeds for non-existing directory with force", async () => {
       await expect(
         fsOps.rmdir(path.join(tempDir, "nonexistent"), true),
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
     });
   });
 

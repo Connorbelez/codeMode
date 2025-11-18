@@ -10,7 +10,11 @@ import path from "path";
 import { constants as fsConstants } from "fs";
 
 import type { IWorktreeRegistry } from "./api";
-import type { WorktreeSession, WorktreeRegistryState } from "./types";
+import type {
+  WorktreeSession,
+  WorktreeRegistryState,
+  WorktreeConfig,
+} from "./types";
 import { WorktreeErrors } from "./errors";
 import { DEFAULT_WORKTREE_CONFIG } from "./constants";
 
@@ -25,6 +29,7 @@ const REGISTRY_VERSION = "1.0.0";
 export class WorktreeRegistry implements IWorktreeRegistry {
   private readonly registryPath: string;
   private lockPromise: Promise<void> | null = null;
+  private storedConfig: WorktreeConfig | undefined;
 
   constructor(registryPath: string) {
     if (!registryPath || !registryPath.trim()) {
@@ -41,55 +46,133 @@ export class WorktreeRegistry implements IWorktreeRegistry {
   }
 
   /**
+   * Load all sessions from the registry file (without locking).
+   *
+   * Internal helper that performs file I/O without acquiring a lock.
+   * Callers must ensure they hold the lock before calling this.
+   *
+   * Returns empty Map if file doesn't exist.
+   * Handles corrupted JSON by backing up and reinitializing.
+   */
+  private async loadUnlocked(): Promise<{
+    sessions: Map<string, WorktreeSession>;
+    config?: WorktreeConfig;
+  }> {
+    try {
+      // Check if file exists
+      await fs.access(this.registryPath, fsConstants.F_OK);
+    } catch {
+      // File doesn't exist - return empty Map
+      return { sessions: new Map() };
+    }
+
+    try {
+      const content = await fs.readFile(this.registryPath, "utf-8");
+      const state: WorktreeRegistryState = JSON.parse(content);
+
+      // Validate schema version
+      if (!state.version) {
+        throw new Error("Missing version field in registry");
+      }
+
+      // Convert dates from ISO strings back to Date objects
+      const sessions = new Map<string, WorktreeSession>();
+      for (const [id, session] of Object.entries(state.sessions || {})) {
+        sessions.set(id, this.deserializeSession(session));
+      }
+
+      // Store and return config if present
+      const config = state.config;
+      if (config) {
+        this.storedConfig = config;
+        return { sessions, config };
+      }
+
+      return { sessions };
+    } catch (error) {
+      // Handle corrupted JSON - backup and reinitialize
+      const backupPath = `${this.registryPath}.backup.${Date.now()}`;
+
+      try {
+        await fs.copyFile(this.registryPath, backupPath);
+        console.warn(`Corrupted registry detected. Backed up to ${backupPath}`);
+      } catch {
+        // If backup fails, still continue with empty state
+        console.warn("Failed to backup corrupted registry");
+      }
+
+      // Return empty Map to start fresh
+      return { sessions: new Map() };
+    }
+  }
+
+  /**
    * Load all sessions from the registry file.
    *
    * Returns empty Map if file doesn't exist.
    * Handles corrupted JSON by backing up and reinitializing.
    */
-  async load(): Promise<Map<string, WorktreeSession>> {
+  async load(): Promise<{
+    sessions: Map<string, WorktreeSession>;
+    config?: WorktreeConfig;
+  }> {
     return this.withLock(async () => {
-      try {
-        // Check if file exists
-        await fs.access(this.registryPath, fsConstants.F_OK);
-      } catch {
-        // File doesn't exist - return empty Map
-        return new Map();
-      }
-
-      try {
-        const content = await fs.readFile(this.registryPath, "utf-8");
-        const state: WorktreeRegistryState = JSON.parse(content);
-
-        // Validate schema version
-        if (!state.version) {
-          throw new Error("Missing version field in registry");
-        }
-
-        // Convert dates from ISO strings back to Date objects
-        const sessions = new Map<string, WorktreeSession>();
-        for (const [id, session] of Object.entries(state.sessions || {})) {
-          sessions.set(id, this.deserializeSession(session));
-        }
-
-        return sessions;
-      } catch (error) {
-        // Handle corrupted JSON - backup and reinitialize
-        const backupPath = `${this.registryPath}.backup.${Date.now()}`;
-
-        try {
-          await fs.copyFile(this.registryPath, backupPath);
-          console.warn(
-            `Corrupted registry detected. Backed up to ${backupPath}`,
-          );
-        } catch {
-          // If backup fails, still continue with empty state
-          console.warn("Failed to backup corrupted registry");
-        }
-
-        // Return empty Map to start fresh
-        return new Map();
-      }
+      return this.loadUnlocked();
     });
+  }
+
+  /**
+   * Save all sessions to the registry file atomically (without locking).
+   *
+   * Internal helper that performs file I/O without acquiring a lock.
+   * Callers must ensure they hold the lock before calling this.
+   *
+   * Uses atomic write (write to temp, then rename) to prevent corruption.
+   */
+  private async saveUnlocked(
+    sessions: Map<string, WorktreeSession>,
+    config?: WorktreeConfig,
+  ): Promise<void> {
+    // Serialize sessions map to plain object
+    const sessionsObj: Record<string, WorktreeSession> = {};
+    for (const [id, session] of sessions.entries()) {
+      sessionsObj[id] = this.serializeSession(session);
+    }
+
+    // Use provided config, stored config, or default
+    const configToSave = config || this.storedConfig || DEFAULT_WORKTREE_CONFIG;
+    // Update stored config for future saves
+    this.storedConfig = configToSave;
+
+    const state: WorktreeRegistryState = {
+      version: REGISTRY_VERSION,
+      sessions: sessionsObj,
+      lastCleanup: new Date(),
+      config: configToSave,
+    };
+
+    const content = JSON.stringify(state, null, 2);
+
+    // Ensure directory exists
+    const dir = path.dirname(this.registryPath);
+    await fs.mkdir(dir, { recursive: true });
+
+    // Atomic write: write to temp file, then rename
+    const tempPath = `${this.registryPath}.tmp.${process.pid}`;
+    try {
+      await fs.writeFile(tempPath, content, { mode: 0o600 }); // Restrictive permissions
+      await fs.rename(tempPath, this.registryPath);
+    } catch (error) {
+      // Clean up temp file if rename failed
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw WorktreeErrors.validationFailed(
+        `Failed to save registry: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   /**
@@ -97,72 +180,54 @@ export class WorktreeRegistry implements IWorktreeRegistry {
    *
    * Uses atomic write (write to temp, then rename) to prevent corruption.
    */
-  async save(sessions: Map<string, WorktreeSession>): Promise<void> {
+  async save(
+    sessions: Map<string, WorktreeSession>,
+    config?: WorktreeConfig,
+  ): Promise<void> {
     return this.withLock(async () => {
-      // Serialize sessions map to plain object
-      const sessionsObj: Record<string, WorktreeSession> = {};
-      for (const [id, session] of sessions.entries()) {
-        sessionsObj[id] = this.serializeSession(session);
-      }
-
-      const state: WorktreeRegistryState = {
-        version: REGISTRY_VERSION,
-        sessions: sessionsObj,
-        lastCleanup: new Date(),
-        config: DEFAULT_WORKTREE_CONFIG,
-      };
-
-      const content = JSON.stringify(state, null, 2);
-
-      // Ensure directory exists
-      const dir = path.dirname(this.registryPath);
-      await fs.mkdir(dir, { recursive: true });
-
-      // Atomic write: write to temp file, then rename
-      const tempPath = `${this.registryPath}.tmp.${process.pid}`;
-      try {
-        await fs.writeFile(tempPath, content, { mode: 0o600 }); // Restrictive permissions
-        await fs.rename(tempPath, this.registryPath);
-      } catch (error) {
-        // Clean up temp file if rename failed
-        try {
-          await fs.unlink(tempPath);
-        } catch {
-          // Ignore cleanup errors
-        }
-        throw WorktreeErrors.validationFailed(
-          `Failed to save registry: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
+      await this.saveUnlocked(sessions, config);
     });
   }
 
   /**
    * Add or update a single session in the registry.
+   *
+   * Performs the entire read-modify-write operation atomically within a single lock.
    */
   async upsert(session: WorktreeSession): Promise<void> {
-    const sessions = await this.load();
-    sessions.set(session.id, session);
-    await this.save(sessions);
+    return this.withLock(async () => {
+      const { sessions, config } = await this.loadUnlocked();
+      sessions.set(session.id, session);
+      await this.saveUnlocked(sessions, config);
+    });
   }
 
   /**
    * Remove a session from the registry.
+   *
+   * Performs the entire read-modify-write operation atomically within a single lock.
    */
   async remove(sessionId: string): Promise<void> {
-    const sessions = await this.load();
-    if (!sessions.has(sessionId)) {
-      throw WorktreeErrors.notFound(sessionId);
-    }
-    sessions.delete(sessionId);
-    await this.save(sessions);
+    return this.withLock(async () => {
+      const { sessions, config } = await this.loadUnlocked();
+      if (!sessions.has(sessionId)) {
+        throw WorktreeErrors.notFound(sessionId);
+      }
+      sessions.delete(sessionId);
+      await this.saveUnlocked(sessions, config);
+    });
   }
 
   /**
    * Clear all sessions from the registry.
+   *
+   * Performs the entire read-modify-write operation atomically within a single lock.
    */
   async clear(): Promise<void> {
-    await this.save(new Map());
+    return this.withLock(async () => {
+      const { config } = await this.loadUnlocked();
+      await this.saveUnlocked(new Map(), config);
+    });
   }
 
   /**

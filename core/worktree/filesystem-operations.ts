@@ -7,6 +7,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { constants as fsConstants } from "fs";
+import { minimatch } from "minimatch";
 
 import type { IFilesystemOperations } from "./api";
 import { WorktreeErrors } from "./errors";
@@ -179,6 +180,7 @@ export class FilesystemOperations implements IFilesystemOperations {
 
   /**
    * Copy directory recursively with optional filtering.
+   * Filters are applied only to files, not directories, to preserve recursive semantics.
    */
   private async copyDirectory(
     source: string,
@@ -193,20 +195,23 @@ export class FilesystemOperations implements IFilesystemOperations {
       const sourcePath = path.join(source, entry.name);
       const destPath = path.join(dest, entry.name);
 
-      if (filter && !this.matchesFilter(sourcePath, filter)) {
-        continue;
-      }
-
       if (entry.isDirectory()) {
+        // Always recurse into directories to preserve recursive semantics
+        // Filters are only applied to files during traversal
         await this.copyDirectory(sourcePath, destPath, filter);
       } else if (entry.isFile()) {
+        // Apply filter only to files
+        if (filter && !this.matchesFilter(sourcePath, filter)) {
+          continue;
+        }
         await fs.copyFile(sourcePath, destPath);
       }
     }
   }
 
   /**
-   * Check if a path matches any filter patterns.
+   * Check if a path matches any filter patterns using proper glob matching.
+   * Uses minimatch for safe, correct glob pattern matching with proper metacharacter handling.
    */
   private matchesFilter(targetPath: string, filter: string[]): boolean {
     if (!filter || filter.length === 0) {
@@ -217,15 +222,9 @@ export class FilesystemOperations implements IFilesystemOperations {
     const basename = path.basename(normalized);
 
     return filter.some((pattern) => {
-      // Simple glob matching (supports * and **)
-      const regexPattern = pattern
-        .replace(/\./g, "\\.")
-        .replace(/\*\*/g, ".*")
-        .replace(/\*/g, "[^/]*");
-
-      const regex = new RegExp(regexPattern);
+      // Use minimatch for proper glob matching with correct metacharacter escaping
       // Match against both full path and basename
-      return regex.test(normalized) || regex.test(basename);
+      return minimatch(normalized, pattern) || minimatch(basename, pattern);
     });
   }
 

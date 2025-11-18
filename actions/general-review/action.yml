@@ -1,13 +1,13 @@
-name: "Continue PR Review"
-description: "Automated code review for pull requests using Continue CLI"
-author: "Continue Dev, Inc."
+name: "CodeModo PR Review"
+description: "Automated code review for pull requests using CodeModo CLI"
+author: "CodeModo Dev, Inc."
 
 inputs:
   continue-api-key:
-    description: "API key for Continue service"
+    description: "API key for CodeModo service"
     required: true
   continue-org:
-    description: "Organization for Continue config"
+    description: "Organization for CodeModo config"
     required: true
   continue-agent:
     description: 'Agent path to use (e.g., "myorg/review-bot")'
@@ -110,7 +110,7 @@ runs:
       with:
         node-version: 20
 
-    - name: Install Continue CLI
+    - name: Install CodeModo CLI
       if: env.SHOULD_RUN == 'true'
       shell: bash
       run: npm install -g @continuedev/cli@latest
@@ -121,16 +121,16 @@ runs:
       run: |
         # Create directory for scripts
         mkdir -p .continue-action-scripts
-        
-        # Check if we're running in the Continue repo itself (scripts exist locally)
+
+        # Check if we're running in the CodeModo repo itself (scripts exist locally)
         if [ -f "actions/general-review/scripts/buildPrompt.js" ] && [ -f "actions/general-review/scripts/writeMarkdown.js" ]; then
-          echo "Running in Continue repo - using local scripts from current checkout"
+          echo "Running in CodeModo repo - using local scripts from current checkout"
           cp actions/general-review/scripts/buildPrompt.js .continue-action-scripts/buildPrompt.js
           cp actions/general-review/scripts/writeMarkdown.js .continue-action-scripts/writeMarkdown.js
         else
-          echo "Running in external repo - downloading scripts from Continue repo"
+          echo "Running in external repo - downloading scripts from CodeModo repo"
           
-          # Download scripts from Continue repo
+          # Download scripts from CodeModo repo
           echo "Downloading buildPrompt.js..."
           curl -sSL https://raw.githubusercontent.com/continuedev/continue/main/actions/general-review/scripts/buildPrompt.js \
             -o .continue-action-scripts/buildPrompt.js
@@ -139,18 +139,18 @@ runs:
           curl -sSL https://raw.githubusercontent.com/continuedev/continue/main/actions/general-review/scripts/writeMarkdown.js \
             -o .continue-action-scripts/writeMarkdown.js
         fi
-        
+
         # Verify scripts exist
         if [ ! -f .continue-action-scripts/buildPrompt.js ]; then
           echo "Error: buildPrompt.js not found"
           exit 1
         fi
-        
+
         if [ ! -f .continue-action-scripts/writeMarkdown.js ]; then
           echo "Error: writeMarkdown.js not found"
           exit 1
         fi
-        
+
         echo "Scripts ready:"
         ls -lh .continue-action-scripts/
 
@@ -179,7 +179,7 @@ runs:
             per_page: 100
           });
 
-          // Find existing Continue review comment
+          // Find existing CodeModo review comment
           const existingComment = comments
             .filter(c => c.body && c.body.includes(marker))
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
@@ -194,13 +194,13 @@ runs:
             initialMessage = `${marker}\n**🔄 Review In Progress**\n\n*Triggered by @${context.payload.comment.user.login}'s request*\n\n`;
           }
 
-          initialMessage += `Continue AI is analyzing the code changes...\n\n`;
+          initialMessage += `CodeModo AI is analyzing the code changes...\n\n`;
           initialMessage += `📊 **Review Scope:**\n`;
           initialMessage += `- Repository: ${context.repo.owner}/${context.repo.repo}\n`;
           initialMessage += `- PR #${prNumber}\n\n`;
           initialMessage += `⏱️ This typically takes 1-2 minutes.\n\n`;
           initialMessage += `[View live progress →](${workflowRunUrl})\n\n`;
-          initialMessage += `---\n<!-- ${new Date().toISOString()} | Powered by Continue (https://continue.dev) -->`;
+          initialMessage += `---\n<!-- ${new Date().toISOString()} | Powered by CodeModo (https://continue.dev) -->`;
 
           if (existingComment) {
             // Check if comment is less than 1 hour old
@@ -260,7 +260,7 @@ runs:
         node .continue-action-scripts/buildPrompt.js "$PR_NUMBER"
         rm -f pr_data.json
 
-    - name: Run Continue CLI Review
+    - name: Run CodeModo CLI Review
       if: env.SHOULD_RUN == 'true'
       shell: bash
       env:
@@ -269,7 +269,7 @@ runs:
         CONTINUE_AGENT: ${{ inputs.continue-agent }}
         GITHUB_TOKEN: ${{ github.token }}
       run: |
-        echo "Running Continue CLI with prompt:"
+        echo "Running CodeModo CLI with prompt:"
         echo "=================================="
         head -n 100 review_prompt.txt
         echo "... [truncated] ..."
@@ -297,22 +297,22 @@ runs:
           exit 1
         fi
 
-        # Test Continue CLI availability
+        # Test CodeModo CLI availability
         if [ "$SKIP_CLI" != "true" ]; then
-          echo "Testing Continue CLI..."
+          echo "Testing CodeModo CLI..."
           if ! which cn > /dev/null 2>&1; then
-            echo "Warning: Continue CLI not found or not working"
+            echo "Warning: CodeModo CLI not found or not working"
             node .continue-action-scripts/writeMarkdown.js code_review.md cli_install_failed
             echo "SKIP_CLI=true" >> $GITHUB_ENV
           else
-            echo "Continue CLI found at: $(which cn)"
-            echo "Continue CLI version: $(cn --version 2>/dev/null || echo 'version check failed')"
+            echo "CodeModo CLI found at: $(which cn)"
+            echo "CodeModo CLI version: $(cn --version 2>/dev/null || echo 'version check failed')"
           fi
         fi
 
         # Run the CLI with validated config and error handling
         if [ "$SKIP_CLI" != "true" ]; then
-          echo "Executing Continue CLI with config: $CONTINUE_ORG/$CONTINUE_AGENT"
+          echo "Executing CodeModo CLI with config: $CONTINUE_ORG/$CONTINUE_AGENT"
           
           # Write prompt to temp file for headless mode
           PROMPT_FILE="/tmp/continue-review-$RANDOM.txt"
@@ -324,7 +324,7 @@ runs:
           echo "Executing command: cn --agent $CONTINUE_ORG/$CONTINUE_AGENT -p @$PROMPT_FILE --allow Bash"
           
           if timeout 360 cn --agent "$CONTINUE_ORG/$CONTINUE_AGENT" -p "@$PROMPT_FILE" --allow Bash > code_review_raw.md 2>cli_error.log; then
-            echo "Continue CLI completed successfully"
+            echo "CodeModo CLI completed successfully"
             echo "Raw output length: $(wc -c < code_review_raw.md) characters"
             
             # Clean up ANSI codes if any
@@ -337,11 +337,11 @@ runs:
             
             # Check if output is empty
             if [ ! -s code_review.md ]; then
-              echo "Warning: Continue CLI returned empty output"
+              echo "Warning: CodeModo CLI returned empty output"
               node .continue-action-scripts/writeMarkdown.js code_review.md empty_output
             fi
           else
-            echo "Error: Continue CLI command failed with exit code $?"
+            echo "Error: CodeModo CLI command failed with exit code $?"
             echo "CLI error log:"
             cat cli_error.log
             
@@ -408,7 +408,7 @@ runs:
 
             // Add footer with timestamp and branding
             const timestamp = new Date().toISOString();
-            reviewContent += `\n\n---\n<!-- ${timestamp} | Powered by Continue (https://continue.dev) -->`;
+            reviewContent += `\n\n---\n<!-- ${timestamp} | Powered by CodeModo (https://continue.dev) -->`;
 
             // Look for existing review comment to update (sticky comment)
             const marker = '<!-- continue-agent-review -->';
@@ -439,7 +439,7 @@ runs:
                   per_page: 100
                 });
 
-                // Find existing Continue review comment
+                // Find existing CodeModo review comment
                 const existingComment = comments
                   .filter(c => c.body && c.body.includes(marker))
                   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
@@ -472,7 +472,7 @@ runs:
                 per_page: 100
               });
 
-              // Find existing Continue review comment
+              // Find existing CodeModo review comment
               const existingComment = comments
                 .filter(c => c.body && c.body.includes(marker))
                 .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];

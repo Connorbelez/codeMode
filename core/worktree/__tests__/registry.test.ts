@@ -4,7 +4,8 @@ import path from "path";
 import os from "os";
 
 import { WorktreeRegistry } from "../registry";
-import type { WorktreeSession } from "../types";
+import type { WorktreeSession, WorktreeConfig } from "../types";
+import { DEFAULT_WORKTREE_CONFIG } from "../constants";
 
 describe("WorktreeRegistry", () => {
   let registry: WorktreeRegistry;
@@ -47,7 +48,7 @@ describe("WorktreeRegistry", () => {
 
   describe("load", () => {
     it("returns empty Map for non-existent file", async () => {
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
 
       expect(sessions).toBeInstanceOf(Map);
       expect(sessions.size).toBe(0);
@@ -80,7 +81,7 @@ describe("WorktreeRegistry", () => {
       await registry.save(new Map([["wt-123", mockSession]]));
 
       // Load and verify
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
 
       expect(sessions.size).toBe(1);
       expect(sessions.has("wt-123")).toBe(true);
@@ -103,7 +104,7 @@ describe("WorktreeRegistry", () => {
       // Write corrupted JSON
       await fs.writeFile(registryPath, "{ invalid json }", "utf-8");
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
 
       // Should return empty Map
       expect(sessions.size).toBe(0);
@@ -123,7 +124,7 @@ describe("WorktreeRegistry", () => {
         "utf-8",
       );
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
 
       // Should handle gracefully and return empty
       expect(sessions.size).toBe(0);
@@ -256,7 +257,7 @@ describe("WorktreeRegistry", () => {
 
       await registry.upsert(mockSession);
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
       expect(sessions.has("wt-new")).toBe(true);
     });
 
@@ -288,7 +289,7 @@ describe("WorktreeRegistry", () => {
       const updated = { ...mockSession, status: "merged" as const };
       await registry.upsert(updated);
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
       expect(sessions.get("wt-update")?.status).toBe("merged");
     });
   });
@@ -319,7 +320,7 @@ describe("WorktreeRegistry", () => {
       await registry.upsert(mockSession);
       await registry.remove("wt-remove");
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
       expect(sessions.has("wt-remove")).toBe(false);
     });
 
@@ -381,7 +382,7 @@ describe("WorktreeRegistry", () => {
 
       await registry.clear();
 
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
       expect(sessions.size).toBe(0);
     });
   });
@@ -417,7 +418,7 @@ describe("WorktreeRegistry", () => {
       };
 
       await registry.save(new Map([["wt-dates", mockSession]]));
-      const sessions = await registry.load();
+      const { sessions } = await registry.load();
       const loaded = sessions.get("wt-dates")!;
 
       expect(loaded.createdAt.toISOString()).toBe(testDate.toISOString());
@@ -428,6 +429,87 @@ describe("WorktreeRegistry", () => {
       expect(loaded.metadata.lastTestResult?.timestamp.toISOString()).toBe(
         testDate.toISOString(),
       );
+    });
+  });
+
+  describe("config persistence", () => {
+    it("saves and loads config", async () => {
+      const mockSession: WorktreeSession = {
+        id: "wt-config",
+        agentSessionId: "agent-123",
+        worktreePath: "/path/to/worktree",
+        branchName: "claude/wt-config",
+        parentBranch: "main",
+        status: "active",
+        createdAt: new Date(),
+        lastAccessedAt: new Date(),
+        metadata: {
+          hasUncommittedChanges: false,
+          hasUnpushedCommits: false,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          filesChanged: 0,
+          diffStats: { additions: 0, deletions: 0 },
+          diskUsageBytes: 0,
+          lastRefreshedAt: new Date(),
+        },
+      };
+
+      const customConfig: WorktreeConfig = {
+        ...DEFAULT_WORKTREE_CONFIG,
+        worktreeBaseDir: ".custom-worktrees",
+        branchPrefix: "custom/",
+        maxConcurrentWorktrees: 5,
+      };
+
+      // Save with custom config
+      await registry.save(new Map([["wt-config", mockSession]]), customConfig);
+
+      // Load and verify config is restored
+      const { sessions, config } = await registry.load();
+      expect(sessions.size).toBe(1);
+      expect(config).toBeDefined();
+      expect(config?.worktreeBaseDir).toBe(".custom-worktrees");
+      expect(config?.branchPrefix).toBe("custom/");
+      expect(config?.maxConcurrentWorktrees).toBe(5);
+    });
+
+    it("uses stored config when saving without explicit config", async () => {
+      const mockSession: WorktreeSession = {
+        id: "wt-stored",
+        agentSessionId: "agent-456",
+        worktreePath: "/path/to/worktree",
+        branchName: "claude/wt-stored",
+        parentBranch: "main",
+        status: "active",
+        createdAt: new Date(),
+        lastAccessedAt: new Date(),
+        metadata: {
+          hasUncommittedChanges: false,
+          hasUnpushedCommits: false,
+          commitsAhead: 0,
+          commitsBehind: 0,
+          filesChanged: 0,
+          diffStats: { additions: 0, deletions: 0 },
+          diskUsageBytes: 0,
+          lastRefreshedAt: new Date(),
+        },
+      };
+
+      const customConfig: WorktreeConfig = {
+        ...DEFAULT_WORKTREE_CONFIG,
+        branchPrefix: "stored/",
+      };
+
+      // Save with custom config first
+      await registry.save(new Map([["wt-stored", mockSession]]), customConfig);
+
+      // Save again without config - should use stored config
+      await registry.save(new Map([["wt-stored", mockSession]]));
+
+      // Verify stored config was used
+      const { config } = await registry.load();
+      expect(config?.branchPrefix).toBe("stored/");
     });
   });
 });

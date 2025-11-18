@@ -205,8 +205,6 @@ export async function configYamlToContinueConfig(options: {
 
   if (config.experimental) {
     continueConfig.experimental = { ...config.experimental };
-  } else {
-    console.log("NO Exprimental: ", config, continueConfig); //THis triggers.
   }
 
   const resolvedCodeExecution =

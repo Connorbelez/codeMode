@@ -1,10 +1,10 @@
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import type { WorktreeSessionWithStats } from "core/worktree/types";
-import { useContext, useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { Button } from "../ui";
-import { WorktreeSessionCard, WorktreeActionType } from "./WorktreeSessionCard";
+import { WorktreeActionType, WorktreeSessionCard } from "./WorktreeSessionCard";
 
 type SuccessMessage<T> = { status: "success"; content: T };
 type ErrorMessage = { status: "error"; error?: string };
@@ -29,9 +29,9 @@ function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-function hydrateSession(
-  session: WorktreeSessionWithStats,
-): WorktreeSessionWithStats {
+type UiWorktreeSession = WorktreeSessionWithStats & { isActive?: boolean };
+
+function hydrateSession(session: UiWorktreeSession): UiWorktreeSession {
   return {
     ...session,
     createdAt: toDate(session.createdAt),
@@ -51,9 +51,7 @@ function hydrateSession(
   };
 }
 
-function sortSessions(
-  sessions: WorktreeSessionWithStats[],
-): WorktreeSessionWithStats[] {
+function sortSessions(sessions: UiWorktreeSession[]): UiWorktreeSession[] {
   return [...sessions].sort(
     (a, b) =>
       toDate(b.lastAccessedAt).getTime() - toDate(a.lastAccessedAt).getTime(),
@@ -68,7 +66,7 @@ export function WorktreeSessionsPanel({
   className,
 }: WorktreeSessionsPanelProps) {
   const ideMessenger = useContext(IdeMessengerContext);
-  const [sessions, setSessions] = useState<WorktreeSessionWithStats[]>([]);
+  const [sessions, setSessions] = useState<UiWorktreeSession[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -88,7 +86,7 @@ export function WorktreeSessionsPanel({
       }
       try {
         const result = await ideMessenger.request("worktree/list", undefined);
-        if (isSuccessMessage<WorktreeSessionWithStats[]>(result)) {
+        if (isSuccessMessage<UiWorktreeSession[]>(result)) {
           const hydrated = result.content.map((session) =>
             hydrateSession(session),
           );
@@ -142,19 +140,20 @@ export function WorktreeSessionsPanel({
   );
 
   const handleAction = useCallback(
-    async (type: WorktreeActionType, session: WorktreeSessionWithStats) => {
+    async (type: WorktreeActionType, session: UiWorktreeSession) => {
       setActionState({ type, sessionId: session.id });
       try {
         if (type === "switch") {
           const response = await ideMessenger.request("worktree/switch", {
             sessionId: session.id,
+            openInNewWindow: true,
           });
           if (isErrorMessage(response)) {
-            throw new Error(response.error ?? "Failed to switch worktree");
+            throw new Error(response.error ?? "Failed to open worktree");
           }
           ideMessenger.post("showToast", [
             "info",
-            `Opened ${session.branchName}`,
+            `Opened ${session.branchName} in new window`,
           ]);
         } else if (type === "merge") {
           const response = await ideMessenger.request("worktree/merge", {
@@ -194,9 +193,32 @@ export function WorktreeSessionsPanel({
     [fetchSessions, ideMessenger],
   );
 
+  const handleReturnToMain = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await ideMessenger.request("worktree/resetActive", {});
+      if (isErrorMessage(response)) {
+        throw new Error(response.error ?? "Failed to switch to main workspace");
+      }
+      ideMessenger.post("showToast", ["info", "Using main workspace"]);
+      await fetchSessions({ silent: true });
+    } catch (err) {
+      const message =
+        (err as Error).message ?? "Failed to switch to main workspace";
+      ideMessenger.post("showToast", ["error", message]);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchSessions, ideMessenger]);
+
   const panelClassName = useMemo(
     () => `border-border bg-input/40 rounded border ${className ?? ""}`.trim(),
     [className],
+  );
+
+  const hasActiveSession = useMemo(
+    () => sessions.some((session) => session.isActive),
+    [sessions],
   );
 
   const content = useMemo(() => {
@@ -245,6 +267,15 @@ export function WorktreeSessionsPanel({
           </h3>
         </div>
         <div className="flex items-center gap-2">
+          {hasActiveSession && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleReturnToMain()}
+            >
+              Main workspace
+            </Button>
+          )}
           {isRefreshing && (
             <ArrowPathIcon className="text-description h-4 w-4 animate-spin" />
           )}

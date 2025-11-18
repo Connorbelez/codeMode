@@ -12,7 +12,6 @@ import type { WorktreeLaunchControl } from "../WorktreeMode/types";
 import { ContextItemsPeek } from "./belowMainInput/ContextItemsPeek";
 import { RulesPeek } from "./belowMainInput/RulesPeek";
 import { chatInputBorderRadius } from "./constants";
-import { ElectricBorder } from "./ElectricBorder";
 import { ToolbarOptions } from "./InputToolbar";
 import { Lump } from "./Lump";
 import { TipTapEditor } from "./TipTapEditor";
@@ -31,6 +30,8 @@ interface ContinueInputBoxProps {
   hidden?: boolean;
   inputId: string; // used to keep track of things per input in redux
   worktreeLaunchControl?: WorktreeLaunchControl;
+  onEditorReady?: (editor: Editor | null) => void;
+  onActiveKeyChange?: (key: string | null) => void;
 }
 
 const EDIT_DISALLOWED_CONTEXT_PROVIDERS = [
@@ -114,11 +115,12 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
       className={`${props.hidden ? "hidden" : ""}`}
       data-testid={`continue-input-box-${props.inputId}`}
     >
-      <div className={`relative flex flex-col px-2`}>
+      <div className={`relative mb-2 flex flex-col px-2`}>
         {props.isMainInput && <Lump />}
-        <ElectricBorder
-          $loading={isStreaming && (props.isLastUserInput || isInEdit) ? 1 : 0}
-          $borderRadius={chatInputBorderRadius}
+        <div
+          style={{
+            borderRadius: chatInputBorderRadius,
+          }}
         >
           <TipTapEditor
             editorState={props.editorState}
@@ -131,8 +133,10 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
             toolbarOptions={toolbarOptions}
             inputId={props.inputId}
             worktreeLaunchControl={props.worktreeLaunchControl}
+            onEditorReady={props.onEditorReady}
+            onActiveKeyChange={props.onActiveKeyChange}
           />
-        </ElectricBorder>
+        </div>
       </div>
 
       {(appliedRules.length > 0 || contextItems.length > 0) && (

@@ -5,35 +5,37 @@
  * with comprehensive error handling and retry logic.
  *
  * Traditional Tool Calling: Complex error handling nearly impossible
- * Code Mode: Full try-catch, retries, fallbacks
+ * CodeModo: Full try-catch, retries, fallbacks
  * Token Reduction: 96.8%
  */
 
-import { filesystem, github } from '/mcp';
+import { filesystem, github } from "/mcp";
 
 // Configuration
-const INPUT_DIR = '/uploads/data';
-const OUTPUT_DIR = '/processed/data';
-const GITHUB_OWNER = 'myorg';
-const GITHUB_REPO = 'data-repo';
+const INPUT_DIR = "/uploads/data";
+const OUTPUT_DIR = "/processed/data";
+const GITHUB_OWNER = "myorg";
+const GITHUB_REPO = "data-repo";
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // ms
 
 // Utility: Sleep function
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Utility: Retry wrapper with exponential backoff
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries = MAX_RETRIES,
-  delay = RETRY_DELAY
+  delay = RETRY_DELAY,
 ): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     if (retries === 0) throw error;
 
-    console.log(`⚠️  Operation failed, retrying in ${delay}ms... (${retries} retries left)`);
+    console.log(
+      `⚠️  Operation failed, retrying in ${delay}ms... (${retries} retries left)`,
+    );
     await sleep(delay);
     return withRetry(fn, retries - 1, delay * 2); // Exponential backoff
   }
@@ -42,7 +44,7 @@ async function withRetry<T>(
 // Processing results tracker
 interface ProcessingResult {
   filename: string;
-  status: 'success' | 'error' | 'skipped';
+  status: "success" | "error" | "skipped";
   reason?: string;
   outputPath?: string;
   githubUrl?: string;
@@ -50,21 +52,21 @@ interface ProcessingResult {
 
 const results: ProcessingResult[] = [];
 
-console.log('🚀 Starting data processing pipeline...\n');
+console.log("🚀 Starting data processing pipeline...\n");
 
 // Step 1: List all files in input directory
-console.log('📂 Scanning input directory...');
+console.log("📂 Scanning input directory...");
 let files: string[];
 try {
   const dirContents = await filesystem.listDirectory({ path: INPUT_DIR });
   files = dirContents
-    .filter(item => item.type === 'file' && item.name.endsWith('.json'))
-    .map(item => item.name);
+    .filter((item) => item.type === "file" && item.name.endsWith(".json"))
+    .map((item) => item.name);
 
   console.log(`✅ Found ${files.length} JSON files to process\n`);
 } catch (error) {
-  console.error('❌ Failed to read input directory:', error.message);
-  throw new Error('Pipeline failed: Cannot access input directory');
+  console.error("❌ Failed to read input directory:", error.message);
+  throw new Error("Pipeline failed: Cannot access input directory");
 }
 
 // Step 2: Process each file with error handling
@@ -87,8 +89,8 @@ for (const filename of files) {
       console.log(`  ⚠️  Invalid JSON, skipping`);
       results.push({
         filename,
-        status: 'skipped',
-        reason: 'Invalid JSON format'
+        status: "skipped",
+        reason: "Invalid JSON format",
       });
       continue;
     }
@@ -98,8 +100,8 @@ for (const filename of files) {
       console.log(`  ⚠️  Missing required fields, skipping`);
       results.push({
         filename,
-        status: 'skipped',
-        reason: 'Missing required fields (id, data)'
+        status: "skipped",
+        reason: "Missing required fields (id, data)",
       });
       continue;
     }
@@ -108,19 +110,19 @@ for (const filename of files) {
     const processed = {
       ...data,
       processedAt: new Date().toISOString(),
-      processedBy: 'code-mode-pipeline',
+      processedBy: "code-mode-pipeline",
       metadata: {
         originalFilename: filename,
-        validator: 'v1.0',
-        checksumValid: true // In reality, you'd calculate this
-      }
+        validator: "v1.0",
+        checksumValid: true, // In reality, you'd calculate this
+      },
     };
 
     // 2e. Write to output directory with retry
     await withRetry(async () => {
       await filesystem.writeFile({
         path: outputPath,
-        content: JSON.stringify(processed, null, 2)
+        content: JSON.stringify(processed, null, 2),
       });
     });
 
@@ -137,7 +139,7 @@ for (const filename of files) {
         const existing = await github.getFileContents({
           owner: GITHUB_OWNER,
           repo: GITHUB_REPO,
-          path: githubPath
+          path: githubPath,
         });
         sha = existing.sha; // Need SHA to update existing file
         console.log(`  🔄 Updating existing file in GitHub...`);
@@ -152,8 +154,10 @@ for (const filename of files) {
           repo: GITHUB_REPO,
           path: githubPath,
           message: `Update ${filename} via automated pipeline`,
-          content: Buffer.from(JSON.stringify(processed, null, 2)).toString('base64'),
-          sha // Include if updating existing file
+          content: Buffer.from(JSON.stringify(processed, null, 2)).toString(
+            "base64",
+          ),
+          sha, // Include if updating existing file
         });
       });
 
@@ -166,33 +170,32 @@ for (const filename of files) {
 
     results.push({
       filename,
-      status: 'success',
+      status: "success",
       outputPath,
-      githubUrl
+      githubUrl,
     });
 
     console.log(`  ✅ Complete\n`);
-
   } catch (error) {
     console.log(`  ❌ Error: ${error.message}\n`);
     results.push({
       filename,
-      status: 'error',
-      reason: error.message
+      status: "error",
+      reason: error.message,
     });
   }
 }
 
 // Step 3: Generate summary report
-console.log('\n📊 Pipeline Summary:');
-console.log('═'.repeat(50));
+console.log("\n📊 Pipeline Summary:");
+console.log("═".repeat(50));
 
 const summary = {
   totalFiles: files.length,
-  successful: results.filter(r => r.status === 'success').length,
-  errors: results.filter(r => r.status === 'error').length,
-  skipped: results.filter(r => r.status === 'skipped').length,
-  syncedToGithub: results.filter(r => r.githubUrl).length
+  successful: results.filter((r) => r.status === "success").length,
+  errors: results.filter((r) => r.status === "error").length,
+  skipped: results.filter((r) => r.status === "skipped").length,
+  syncedToGithub: results.filter((r) => r.githubUrl).length,
 };
 
 console.log(`Total files: ${summary.totalFiles}`);
@@ -205,11 +208,15 @@ console.log(`📤 Synced to GitHub: ${summary.syncedToGithub}`);
 const logPath = `${OUTPUT_DIR}/pipeline-log-${Date.now()}.json`;
 await filesystem.writeFile({
   path: logPath,
-  content: JSON.stringify({
-    timestamp: new Date().toISOString(),
-    summary,
-    results
-  }, null, 2)
+  content: JSON.stringify(
+    {
+      timestamp: new Date().toISOString(),
+      summary,
+      results,
+    },
+    null,
+    2,
+  ),
 });
 
 console.log(`\n💾 Detailed log saved to: ${logPath}`);
@@ -219,9 +226,9 @@ if (summary.errors > 0) {
   console.log(`\n📝 Creating GitHub issue for errors...`);
 
   const errorFiles = results
-    .filter(r => r.status === 'error')
-    .map(r => `- \`${r.filename}\`: ${r.reason}`)
-    .join('\n');
+    .filter((r) => r.status === "error")
+    .map((r) => `- \`${r.filename}\`: ${r.reason}`)
+    .join("\n");
 
   const issue = await github.createIssue({
     owner: GITHUB_OWNER,
@@ -250,19 +257,19 @@ ${errorFiles}
 ### Logs
 Full processing log available at: \`${logPath}\`
     `.trim(),
-    labels: ['automated', 'data-pipeline', 'error']
+    labels: ["automated", "data-pipeline", "error"],
   });
 
   console.log(`✅ Created issue: ${issue.html_url}`);
 }
 
-console.log('\n🎉 Pipeline execution complete!');
+console.log("\n🎉 Pipeline execution complete!");
 
 // Return summary to context
 return {
-  pipelineStatus: summary.errors === 0 ? 'success' : 'completed-with-errors',
+  pipelineStatus: summary.errors === 0 ? "success" : "completed-with-errors",
   ...summary,
-  logPath
+  logPath,
 };
 
 /*
@@ -298,7 +305,7 @@ return {
  * Token Comparison:
  * ├─ Traditional: ~220,000 tokens
  * │  └─ (20 files × ~11,000 tokens per file with error handling)
- * ├─ Code Mode: ~7,000 tokens
+ * ├─ CodeModo: ~7,000 tokens
  * │  └─ (schemas + summary result)
  * └─ Reduction: 96.8%
  */
