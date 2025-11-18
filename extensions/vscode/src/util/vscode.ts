@@ -28,11 +28,11 @@ export function getNonce() {
  * @throws Error if the extension is not registered (for example, not installed or not enabled).
  */
 export function getExtensionUri(): vscode.Uri {
-  const extension = vscode.extensions.getExtension("Continue.continue");
+  const extension = vscode.extensions.getExtension("cbizydev.CodeModo");
 
   if (!extension) {
     throw new Error(
-      "Continue extension is not registered. Ensure the extension is installed and enabled.",
+      "CodeModo extension is not registered. Ensure the extension is installed and enabled.",
     );
   }
 
