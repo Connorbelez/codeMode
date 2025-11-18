@@ -1812,6 +1812,7 @@ export interface ContinueConfig {
   modelsByRole: Record<ModelRole, ILLM[]>;
   selectedModelByRole: Record<ModelRole, ILLM | null>;
   data?: DataDestination[];
+  agentImport?: import("./agentImport/types.js").AgentImportConfig;
 }
 
 export interface BrowserSerializedContinueConfig {
@@ -1837,6 +1838,8 @@ export interface BrowserSerializedContinueConfig {
   tabAutocompleteOptions?: Partial<TabAutocompleteOptions>;
   modelsByRole: Record<ModelRole, ModelDescription[]>;
   selectedModelByRole: Record<ModelRole, ModelDescription | null>;
+  agentImport?: import("./agentImport/types.js").AgentImportConfig;
+  importedAgents?: import("./agentImport/types.js").ImportedAgentRecord[];
 }
 
 // DOCS SUGGESTIONS AND PACKAGE INFO

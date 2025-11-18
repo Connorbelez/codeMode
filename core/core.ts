@@ -456,6 +456,108 @@ export class Core {
       return newSharedConfig;
     });
 
+    // Agent Import handlers
+    on("agentImport/getImportedAgents", async () => {
+      const service = this.configHandler.getAgentImportService();
+      return service.getImportedAgents();
+    });
+
+    on("agentImport/addImportPath", async (msg) => {
+      const { config } = await this.configHandler.loadConfig();
+      if (!config) throw new Error("No config loaded");
+
+      // Update config with new import path
+      const agentImport = config.agentImport || {
+        enabled: true,
+        importPaths: [],
+        autoReload: true,
+        namingStrategy: "preserve" as const,
+        conflictResolution: "rename" as const,
+      };
+
+      if (!agentImport.importPaths.includes(msg.data.path)) {
+        agentImport.importPaths.push(msg.data.path);
+      }
+
+      // Trigger service initialization with new config
+      const service = this.configHandler.getAgentImportService();
+      await service.initialize(agentImport);
+
+      await this.configHandler.reloadConfig(
+        "Agent import path added (agentImport/addImportPath message)",
+      );
+    });
+
+    on("agentImport/removeImportPath", async (msg) => {
+      const { config } = await this.configHandler.loadConfig();
+      if (!config) throw new Error("No config loaded");
+
+      if (config.agentImport) {
+        config.agentImport.importPaths = config.agentImport.importPaths.filter(
+          (p) => p !== msg.data.path,
+        );
+
+        // Trigger service initialization with updated config
+        const service = this.configHandler.getAgentImportService();
+        await service.initialize(config.agentImport);
+
+        await this.configHandler.reloadConfig(
+          "Agent import path removed (agentImport/removeImportPath message)",
+        );
+      }
+    });
+
+    on("agentImport/reimportAll", async () => {
+      const service = this.configHandler.getAgentImportService();
+      const result = await service.importAllAgents();
+
+      await this.configHandler.reloadConfig(
+        "Agents reimported (agentImport/reimportAll message)",
+      );
+
+      return result;
+    });
+
+    on("agentImport/createNewAgent", async (msg) => {
+      const service = this.configHandler.getAgentImportService();
+      const record = await service.createNewAgent(msg.data);
+
+      await this.configHandler.reloadConfig(
+        "Agent created (agentImport/createNewAgent message)",
+      );
+
+      return record;
+    });
+
+    on("agentImport/updateAgent", async (msg) => {
+      const service = this.configHandler.getAgentImportService();
+      const record = await service.updateAgent(msg.data.id, msg.data.updates);
+
+      await this.configHandler.reloadConfig(
+        "Agent updated (agentImport/updateAgent message)",
+      );
+
+      return record;
+    });
+
+    on("agentImport/deleteAgent", async (msg) => {
+      const service = this.configHandler.getAgentImportService();
+      await service.deleteAgent(msg.data.id);
+
+      await this.configHandler.reloadConfig(
+        "Agent deleted (agentImport/deleteAgent message)",
+      );
+    });
+
+    on("agentImport/toggleAgentStatus", async (msg) => {
+      const service = this.configHandler.getAgentImportService();
+      await service.toggleAgentStatus(msg.data.id, msg.data.enabled);
+
+      await this.configHandler.reloadConfig(
+        "Agent status toggled (agentImport/toggleAgentStatus message)",
+      );
+    });
+
     on("config/updateSelectedModel", async (msg) => {
       const newSelectedModels = this.globalContext.updateSelectedModel(
         msg.data.profileId,

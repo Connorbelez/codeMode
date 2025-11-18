@@ -40,6 +40,11 @@ import {
   StreamDiffLinesPayload,
   ToolCall,
 } from "../";
+import {
+  AgentImportResult,
+  ClaudeCodeAgentDefinition,
+  ImportedAgentRecord,
+} from "../agentImport";
 import { AutocompleteCodeSnippet } from "../autocomplete/snippets/types";
 import { GetLspDefinitionsFunction } from "../autocomplete/types";
 import { ConfigHandler } from "../config/ConfigHandler";
@@ -126,6 +131,23 @@ export type ToCoreFromIdeOrWebviewProtocol = {
     },
     GlobalContextModelSelections,
   ];
+
+  // Agent Import
+  "agentImport/getImportedAgents": [undefined, ImportedAgentRecord[]];
+  "agentImport/addImportPath": [{ path: string }, void];
+  "agentImport/removeImportPath": [{ path: string }, void];
+  "agentImport/reimportAll": [undefined, AgentImportResult];
+  "agentImport/createNewAgent": [ClaudeCodeAgentDefinition, ImportedAgentRecord];
+  "agentImport/updateAgent": [
+    {
+      id: string;
+      updates: Partial<ClaudeCodeAgentDefinition>;
+    },
+    ImportedAgentRecord,
+  ];
+  "agentImport/deleteAgent": [{ id: string }, void];
+  "agentImport/toggleAgentStatus": [{ id: string; enabled: boolean }, void];
+
   "context/getContextItems": [
     {
       name: string;

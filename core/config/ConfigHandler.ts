@@ -1,5 +1,6 @@
 import { ConfigResult, ConfigValidationError } from "@continuedev/config-yaml";
 
+import { AgentImportService } from "../agentImport/index.js";
 import { ControlPlaneClient } from "../control-plane/client.js";
 import {
   BrowserSerializedContinueConfig,
@@ -42,6 +43,7 @@ export class ConfigHandler {
   controlPlaneClient: ControlPlaneClient;
   private readonly globalContext = new GlobalContext();
   private globalLocalProfileManager: ProfileLifecycleManager;
+  private agentImportService: AgentImportService;
 
   private organizations: OrgWithProfiles[] = [];
   currentProfile: ProfileLifecycleManager | null;
@@ -76,6 +78,9 @@ export class ConfigHandler {
     this.currentOrg = null;
     this.currentProfile = null;
     this.organizations = [];
+
+    // Initialize agent import service
+    this.agentImportService = new AgentImportService(this.ide, this);
 
     this.initter = new EventEmitter();
     this.isInitialized = new Promise((resolve) => {
@@ -530,6 +535,19 @@ export class ConfigHandler {
       errors.unshift(...injectErrors);
     }
 
+    // Initialize agent import service with config
+    if (config?.agentImport) {
+      try {
+        await this.agentImportService.initialize(config.agentImport);
+      } catch (error) {
+        console.error("[ConfigHandler] Error initializing agent import:", error);
+        errors.push({
+          fatal: false,
+          message: `Failed to initialize agent import: ${error.message}`,
+        });
+      }
+    }
+
     this.notifyConfigListeners({ config, errors, configLoadInterrupted });
 
     this.initter.emit("init");
@@ -650,5 +668,10 @@ export class ConfigHandler {
     return this.additionalContextProviders
       .filter((provider) => provider.description.type === "submenu")
       .map((provider) => provider.description.title);
+  }
+
+  // Agent Import methods
+  getAgentImportService() {
+    return this.agentImportService;
   }
 }

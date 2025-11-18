@@ -16,6 +16,16 @@ export const contextSchema = z.object({
 
 export { MCPServer } from "./mcp/index.js";
 
+const agentImportConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  importPaths: z.array(z.string()).default([]),
+  autoReload: z.boolean().default(true),
+  namingStrategy: z.enum(["preserve", "prefix", "suffix"]).default("preserve"),
+  namePrefix: z.string().optional(),
+  nameSuffix: z.string().optional(),
+  conflictResolution: z.enum(["skip", "rename", "overwrite"]).default("rename"),
+});
+
 const promptSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
@@ -305,6 +315,7 @@ export const configSchema = z.object({
   env: envRecord.optional(),
   requestOptions: requestOptionsSchema.optional(),
   codeExecution: codeExecutionConfigSchema.optional(),
+  agentImport: agentImportConfigSchema.optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
