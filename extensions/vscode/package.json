@@ -606,14 +606,14 @@
       "activitybar": [
         {
           "id": "continue",
-          "title": "Continue",
+          "title": "CodeModo",
           "icon": "media/sidebar-icon.png"
         }
       ],
       "panel": [
         {
           "id": "continueConsole",
-          "title": "Continue Console",
+          "title": "CodeModo Console",
           "icon": "$(window)"
         }
       ]
@@ -623,7 +623,7 @@
         {
           "type": "webview",
           "id": "continue.continueGUIView",
-          "name": "Continue",
+          "name": "CodeModo",
           "icon": "media/sidebar-icon.png",
           "visibility": "visible"
         }
@@ -632,7 +632,7 @@
         {
           "type": "webview",
           "id": "continue.continueConsoleView",
-          "name": "Continue Console",
+          "name": "CodeModo Console",
           "icon": "$(window)",
           "visibility": "visible",
           "when": "config.continue.enableConsole"

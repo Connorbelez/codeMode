@@ -14,7 +14,7 @@
     "sentry:sourcemaps": "sentry-cli sourcemaps inject --org continue-xd --project continue ./dist && sentry-cli sourcemaps upload --org continue-xd --project continue ./dist"
   },
   "type": "module",
-  "author": "Connor Belez (CodeModo enhancements), Continue Dev, Inc (Continue.dev framework)",
+  "author": "Connor Belez (CodeModo enhancements), CodeModoDev, Inc (Continue.dev framework)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
