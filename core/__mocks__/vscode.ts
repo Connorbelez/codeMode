@@ -2,6 +2,8 @@
  * Mock VS Code API for testing LSP bridge
  */
 
+import { jest } from "@jest/globals";
+
 export const Uri = {
   parse: jest.fn((filepath: string) => ({
     toString: () => filepath,
