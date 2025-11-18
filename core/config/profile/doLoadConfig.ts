@@ -316,9 +316,6 @@ export default async function doLoadConfig(options: {
       isRemote: await ide.isWorkspaceRemote(),
       modelName: newConfig.selectedModelByRole.chat?.model,
       codeExecutionConfig: codeExecutionConfig,
-      testVal: codeExecutionConfig?.e2bApiKey
-        ? "hello from doLoadConfig"
-        : "goodbye from doLoadConfig",
     }),
   );
 

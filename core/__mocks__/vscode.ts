@@ -1,25 +1,26 @@
 /**
  * Mock VS Code API for testing LSP bridge
  */
+import { vi } from "vitest";
 
 export const Uri = {
-  parse: jest.fn((filepath: string) => ({
+  parse: vi.fn((filepath: string) => ({
     toString: () => filepath,
     fsPath: filepath,
     scheme: "file",
   })),
-  file: jest.fn((path: string) => ({
+  file: vi.fn((path: string) => ({
     toString: () => path,
     fsPath: path,
     scheme: "file",
   })),
 };
 
-export const Position = jest.fn(function (line: number, character: number) {
+export const Position = vi.fn(function (line: number, character: number) {
   return { line, character };
 });
 
-export const Range = jest.fn(function (
+export const Range = vi.fn(function (
   startLine: number,
   startCharacter: number,
   endLine: number,
@@ -32,23 +33,23 @@ export const Range = jest.fn(function (
 });
 
 export const commands = {
-  executeCommand: jest.fn(),
-  registerCommand: jest.fn(),
+  executeCommand: vi.fn(),
+  registerCommand: vi.fn(),
 };
 
 export const languages = {
-  getDiagnostics: jest.fn(),
-  registerCompletionItemProvider: jest.fn(),
+  getDiagnostics: vi.fn(),
+  registerCompletionItemProvider: vi.fn(),
 };
 
 export const window = {
-  showErrorMessage: jest.fn(),
-  showWarningMessage: jest.fn(),
-  showInformationMessage: jest.fn(),
+  showErrorMessage: vi.fn(),
+  showWarningMessage: vi.fn(),
+  showInformationMessage: vi.fn(),
 };
 
 export const workspace = {
-  getConfiguration: jest.fn(),
+  getConfiguration: vi.fn(),
   workspaceFolders: [],
 };
 

@@ -1,4 +1,5 @@
 import * as YAML from "yaml";
+import * as z from "zod";
 import { ZodError } from "zod";
 import { mergeConfigYamlRequestOptions, RequestOptions } from "../browser.js";
 import { PlatformClient, Registry } from "../interfaces/index.js";
@@ -15,6 +16,7 @@ import {
   packageSlugsEqual,
 } from "../interfaces/slugs.js";
 import { markdownToRule } from "../markdown/index.js";
+import { DataDestination } from "../schemas/data/index.js";
 import {
   AssistantUnrolled,
   assistantUnrolledSchema,
@@ -22,15 +24,13 @@ import {
   blockSchema,
   ConfigYaml,
   configYamlSchema,
-  Rule,
-  DocsConfig,
-  Prompt,
-  MCPServer,
   contextSchema,
+  DocsConfig,
+  MCPServer,
+  Prompt,
+  Rule,
 } from "../schemas/index.js";
 import { ModelConfig } from "../schemas/models.js";
-import { DataDestination } from "../schemas/data/index.js";
-import * as z from "zod";
 import { ConfigResult, ConfigValidationError } from "../validation.js";
 import { BlockDuplicationDetector } from "./blockDuplicationDetector.js";
 import {
@@ -431,6 +431,7 @@ function isPackageAllowed(
  * @param blocklistedBlocks - Optional list of package slugs that are explicitly disallowed for `uses` resolution
  * @param injectRequestOptions - Optional request options to merge into the unrolled assistant's requestOptions
  * @returns A ConfigResult containing the assembled AssistantUnrolled in `config` and any collected non-fatal validation errors in `errors`; `configLoadInterrupted` is always `false` for this function.
+ * */
 export async function unrollBlocks(
   assistant: ConfigYaml,
   registry: Registry,
