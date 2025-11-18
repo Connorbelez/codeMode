@@ -65,8 +65,6 @@ async function loadConfigYaml(options: {
   } = options;
 
   // Add local .continue blocks
-  console.debug("Loading local .continue blocks...");
-  console.debug("block types: ", BLOCK_TYPES);
 
   const localBlockPromises = BLOCK_TYPES.map(async (blockType) => {
     const localBlocks = await getAllDotContinueDefinitionFiles(
@@ -82,7 +80,6 @@ async function loadConfigYaml(options: {
   const localPackageIdentifiers: PackageIdentifier[] = (
     await Promise.all(localBlockPromises)
   ).flat();
-  console.debug("Found local .continue blocks: ", localPackageIdentifiers);
 
   // logger.info(
   //   `Loading config.yaml from ${JSON.stringify(packageIdentifier)} with root path ${rootPath}`,
@@ -209,7 +206,7 @@ export async function configYamlToContinueConfig(options: {
   if (config.experimental) {
     continueConfig.experimental = { ...config.experimental };
   } else {
-    console.log("NO Experimental: ", config, continueConfig); //THis triggers.
+    console.log("NO Exprimental: ", config, continueConfig); //THis triggers.
   }
 
   const resolvedCodeExecution =
@@ -466,7 +463,6 @@ export async function loadContinueConfigFromYaml(options: {
     ide,
     packageIdentifier,
   });
-  console.debug("configYamlResult: ", configYamlResult);
 
   if (!configYamlResult.config || configYamlResult.configLoadInterrupted) {
     return {
