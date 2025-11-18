@@ -61,7 +61,7 @@ export class DocumentHistoryTracker {
     const documentHistory = this.documentContentHistoryMap.get(documentPath);
 
     if (!astHistory || !documentHistory) {
-      console.error(`Document ${documentPath} not found in AST tracker`);
+      // Document not tracked yet - add it silently (this is expected behavior)
       this.addDocument(documentPath, documentContent, ast);
       return; // Early return - document was added with initial state
     }
@@ -82,11 +82,11 @@ export class DocumentHistoryTracker {
     const astHistory = this.documentAstMap.get(documentPath);
 
     if (!astHistory) {
-      console.error(`Document ${documentPath} not found in AST tracker`);
+      // Document not tracked yet - this is expected and handled gracefully
       return null;
     }
     if (astHistory.length === 0) {
-      console.error(`Document ${documentPath} has no ASTs`);
+      console.warn(`Document ${documentPath} has no ASTs`);
       return null;
     }
 
@@ -105,11 +105,11 @@ export class DocumentHistoryTracker {
     const documentHistory = this.documentContentHistoryMap.get(documentPath);
 
     if (!documentHistory) {
-      console.error(`Document ${documentPath} not found in AST tracker`);
+      // Document not tracked yet - this is expected and handled gracefully
       return null;
     }
     if (documentHistory.length === 0) {
-      console.error(`Document ${documentPath} has no history`);
+      console.warn(`Document ${documentPath} has no history`);
       return null;
     }
 

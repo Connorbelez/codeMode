@@ -1,27 +1,27 @@
 {
-  "name": "continue",
+  "name": "CodeModo",
   "icon": "media/icon.png",
-  "author": "Continue Dev, Inc",
+  "author": "cbizydev",
   "version": "1.3.26",
   "repository": {
     "type": "git",
-    "url": "https://github.com/continuedev/continue"
+    "url": "https://github.com/connorbelez/codemode"
   },
   "extensionKind": [
     "ui",
     "workspace"
   ],
   "bugs": {
-    "url": "https://github.com/continuedev/continue/issues",
+    "url": "https://github.com/c/connorbelez/codemode/issues",
     "email": "nate@continue.dev"
   },
   "homepage": "https://continue.dev",
-  "qna": "https://github.com/continuedev/continue/issues/new/choose",
+  "qna": "https://github.com/connorbelez/codemode/issues/new/choose",
   "license": "Apache-2.0",
-  "displayName": "Continue - open-source AI code agent",
+  "displayName": "CodeModo - open-source AI code agent",
   "pricing": "Free",
-  "description": "The leading open-source AI code agent",
-  "publisher": "Continue",
+  "description": "The First Code Mode AI Agent",
+  "publisher": "cbizydev",
   "engines": {
     "vscode": "^1.70.0",
     "node": ">=20.19.0"
@@ -606,14 +606,14 @@
       "activitybar": [
         {
           "id": "continue",
-          "title": "Continue",
+          "title": "CodeModo",
           "icon": "media/sidebar-icon.png"
         }
       ],
       "panel": [
         {
           "id": "continueConsole",
-          "title": "Continue Console",
+          "title": "CodeModo Console",
           "icon": "$(window)"
         }
       ]
@@ -623,7 +623,7 @@
         {
           "type": "webview",
           "id": "continue.continueGUIView",
-          "name": "Continue",
+          "name": "CodeModo",
           "icon": "media/sidebar-icon.png",
           "visibility": "visible"
         }
@@ -632,7 +632,7 @@
         {
           "type": "webview",
           "id": "continue.continueConsoleView",
-          "name": "Continue Console",
+          "name": "CodeModo Console",
           "icon": "$(window)",
           "visibility": "visible",
           "when": "config.continue.enableConsole"

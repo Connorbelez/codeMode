@@ -13,7 +13,7 @@ export async function login() {
     console.info(chalk.green("Successfully logged in!"));
 
     // Start the CLI session after successful login
-    console.info(chalk.blue("Starting Continue CLI..."));
+    console.info(chalk.blue("Starting CodeModoCLI..."));
     await chat();
   } catch (error: any) {
     console.error(chalk.red(`Login failed: ${error.message}`));

@@ -1,11 +1,6 @@
 import { useContext } from "react";
 import { Button, SecondaryButton } from "../..";
-import { useAuth } from "../../../context/Auth";
 import { IdeMessengerContext } from "../../../context/IdeMessenger";
-import { useCreditStatus } from "../../../hooks/useCredits";
-import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
-import { selectCurrentOrg } from "../../../redux/slices/profilesSlice";
-import { selectFirstHubProfile } from "../../../redux/thunks/selectFirstHubProfile";
 import ContinueLogo from "../../svg/ContinueLogo";
 import { useOnboardingCard } from "../hooks/useOnboardingCard";
 
@@ -18,42 +13,23 @@ export function OnboardingCardLanding({
 }) {
   const ideMessenger = useContext(IdeMessengerContext);
   const onboardingCard = useOnboardingCard();
-  const auth = useAuth();
-  const currentOrg = useAppSelector(selectCurrentOrg);
-  const dispatch = useAppDispatch();
 
   function onGetStarted() {
-    void auth.login(true).then((success) => {
-      if (success) {
-        onboardingCard.close(isDialog);
-
-        // A new assistant is created when the account is created
-        // We want to switch to this immediately
-        void dispatch(selectFirstHubProfile());
-
-        ideMessenger.post("showTutorial", undefined);
-        ideMessenger.post("showToast", ["info", "🎉 Welcome to Continue!"]);
-      }
-    });
+    onSelectConfigure();
   }
 
-  function openBillingPage() {
-    ideMessenger.post("controlPlane/openUrl", {
-      path: "settings/billing",
-      orgSlug: currentOrg?.slug,
-    });
+  function openGitHub() {
+    ideMessenger.post("openUrl", "https://github.com/continuedev/continue");
     onboardingCard.close(isDialog);
   }
 
-  function openApiKeysPage() {
-    ideMessenger.post("controlPlane/openUrl", {
-      path: "setup-models/api-keys",
-      orgSlug: currentOrg?.slug,
-    });
+  function openFeedback() {
+    ideMessenger.post(
+      "openUrl",
+      "https://github.com/continuedev/continue/issues/new/choose",
+    );
     onboardingCard.close(isDialog);
   }
-
-  const { creditStatus, outOfStarterCredits } = useCreditStatus();
 
   return (
     <div className="xs:px-0 flex w-full max-w-full flex-col items-center justify-center px-4 text-center">
@@ -61,43 +37,37 @@ export function OnboardingCardLanding({
         <ContinueLogo height={75} />
       </div>
 
-      {outOfStarterCredits ? (
-        <>
-          <p className="xs:w-3/4 w-full text-sm">
-            You've used all your starter credits! Click below to purchase
-            credits or configure API keys
-          </p>
-          <SecondaryButton
-            onClick={openApiKeysPage}
-            className="mt-4 grid w-full grid-flow-col items-center gap-2"
-          >
-            Set up API keys
-          </SecondaryButton>
-          <Button
-            onClick={openBillingPage}
-            className="mt-4 grid w-full grid-flow-col items-center gap-2"
-          >
-            Purchase credits
-          </Button>
-        </>
-      ) : (
-        <>
-          <p className="mb-5 mt-0 w-full text-sm">
-            Log in to get up and running with starter credits
-          </p>
+      <h2 className="mb-2 mt-4 text-xl font-semibold">
+        Thanks for trying Continue! 🎉
+      </h2>
 
-          <Button
-            onClick={onGetStarted}
-            className="mt-4 grid w-full grid-flow-col items-center gap-2"
-          >
-            Log in to Continue Hub
-          </Button>
-        </>
-      )}
+      <p className="mb-5 mt-0 w-full text-sm text-gray-400">
+        Continue is free and open source. Get started by configuring your own
+        API keys.
+      </p>
 
-      <SecondaryButton onClick={onSelectConfigure} className="w-full">
-        Or, configure your own models
-      </SecondaryButton>
+      <Button
+        onClick={onGetStarted}
+        className="mt-2 grid w-full grid-flow-col items-center gap-2"
+      >
+        Configure Models
+      </Button>
+
+      <div className="mt-6 flex w-full flex-col gap-2">
+        <SecondaryButton
+          onClick={openGitHub}
+          className="grid w-full grid-flow-col items-center gap-2"
+        >
+          ⭐ Give us a star on GitHub
+        </SecondaryButton>
+
+        <SecondaryButton
+          onClick={openFeedback}
+          className="grid w-full grid-flow-col items-center gap-2"
+        >
+          💬 Share your feedback
+        </SecondaryButton>
+      </div>
     </div>
   );
 }

@@ -14,7 +14,8 @@ import useIsOSREnabled from "../../../hooks/useIsOSREnabled";
 import useUpdatingRef from "../../../hooks/useUpdatingRef";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { selectSelectedChatModel } from "../../../redux/slices/configSlice";
-import InputToolbar, { ToolbarOptions } from "../InputToolbar";
+import type { WorktreeLaunchControl } from "../../WorktreeMode/types";
+import { ToolbarOptions } from "../InputToolbar";
 import { ComboBoxItem } from "../types";
 import { DragOverlay } from "./components/DragOverlay";
 import { InputBoxDiv } from "./components/StyledComponents";
@@ -41,6 +42,9 @@ export interface TipTapEditorProps {
   // TODO: This isn't actually used anywhere in this component, but it appears
   // to be pulled into some of our TipTap extensions.
   inputId: string;
+  worktreeLaunchControl?: WorktreeLaunchControl;
+  onEditorReady?: (editor: Editor | null) => void;
+  onActiveKeyChange?: (key: string | null) => void;
 }
 
 export const TIPPY_DIV_ID = "tippy-js-div";
@@ -79,8 +83,6 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     isStreaming,
   ]);
 
-  const [shouldHideToolbar, setShouldHideToolbar] = useState(true);
-
   useEffect(() => {
     if (!editor) {
       return;
@@ -100,12 +102,6 @@ function TipTapEditorInner(props: TipTapEditorProps) {
       editor?.commands.clearContent(true);
     }
   }, [editor, props.isMainInput]);
-
-  useEffect(() => {
-    if (isInEdit) {
-      setShouldHideToolbar(false);
-    }
-  }, [isInEdit]);
 
   const editorFocusedRef = useUpdatingRef(editor?.isFocused, [editor]);
 
@@ -172,50 +168,20 @@ function TipTapEditorInner(props: TipTapEditorProps) {
     setActiveKey,
   });
 
-  const blurTimeout = useRef<NodeJS.Timeout | null>(null);
-  const cancelBlurTimeout = useCallback(() => {
-    if (blurTimeout.current) {
-      clearTimeout(blurTimeout.current);
-      blurTimeout.current = null;
-    }
-  }, [blurTimeout]);
+  // Expose editor and activeKey to parent
+  useEffect(() => {
+    props.onEditorReady?.(editor);
+  }, [editor, props.onEditorReady]);
 
-  const handleBlur = useCallback(
-    (e: React.FocusEvent) => {
-      if (isInEdit) {
-        return;
-      }
-      // Check if the new focus target is within our InputBoxDiv
-      const currentTarget = e.currentTarget;
-      const relatedTarget = e.relatedTarget as Node | null;
-
-      if (relatedTarget && currentTarget?.contains(relatedTarget)) {
-        return;
-      }
-      // Otherwise give e.g. listboxes a chance to cancel the hiding
-      blurTimeout.current = setTimeout(() => {
-        setShouldHideToolbar(true);
-      }, 100);
-    },
-    [isInEdit, blurTimeout],
-  );
-
-  const handleFocus = useCallback(() => {
-    cancelBlurTimeout();
-    setShouldHideToolbar(false);
-  }, [cancelBlurTimeout]);
+  useEffect(() => {
+    props.onActiveKeyChange?.(activeKey);
+  }, [activeKey, props.onActiveKeyChange]);
 
   return (
     <InputBoxDiv
-      onFocus={handleFocus}
-      onBlur={handleBlur}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
-      className={
-        !props.isMainInput && shouldHideToolbar
-          ? "cursor-pointer"
-          : "cursor-text"
-      }
+      className="cursor-text"
       onClick={() => {
         editor?.commands.focus();
       }}
@@ -264,7 +230,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
         event.preventDefault();
       }}
     >
-      <div className="px-2.5 pb-1 pt-2">
+      <div className="px-4 pb-3 pt-3">
         <EditorContent
           className={`scroll-container overflow-y-scroll ${props.isMainInput ? "max-h-[70vh]" : ""}`}
           spellCheck={false}
@@ -272,31 +238,6 @@ function TipTapEditorInner(props: TipTapEditorProps) {
           onClick={(event) => {
             event.stopPropagation();
           }}
-        />
-        <InputToolbar
-          isMainInput={props.isMainInput}
-          toolbarOptions={props.toolbarOptions}
-          activeKey={activeKey}
-          hidden={shouldHideToolbar && !props.isMainInput}
-          onAddContextItem={() => insertCharacterWithWhitespace("@")}
-          onEnter={onEnter}
-          onImageFileSelected={(file) => {
-            void handleImageFile(ideMessenger, file).then((result) => {
-              if (!editor) {
-                return;
-              }
-              if (result) {
-                const [_, dataUrl] = result;
-                const { schema } = editor.state;
-                const node = schema.nodes.image.create({ src: dataUrl });
-                editor.commands.command(({ tr }) => {
-                  tr.insert(0, node);
-                  return true;
-                });
-              }
-            });
-          }}
-          disabled={isStreaming}
         />
       </div>
 
@@ -333,6 +274,9 @@ const MemoInner = memo(
     prev.placeholder === next.placeholder &&
     prev.historyKey === next.historyKey &&
     prev.inputId === next.inputId &&
+    prev.worktreeLaunchControl?.enabled ===
+      next.worktreeLaunchControl?.enabled &&
+    prev.worktreeLaunchControl?.busy === next.worktreeLaunchControl?.busy &&
     toolbarOptionsEqual(prev.toolbarOptions, next.toolbarOptions) &&
     (prev.availableContextProviders?.length || 0) ===
       (next.availableContextProviders?.length || 0) &&
