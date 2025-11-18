@@ -9,11 +9,12 @@ import {
   vscInputBorderFocus,
 } from "../../..";
 import { getFontSize } from "../../../../util";
+import { chatInputBorderRadius } from "../../constants";
 
 export const InputBoxDiv = styled.div<{}>`
   resize: none;
   font-family: inherit;
-  border-radius: 0.5rem;
+  border-radius: ${chatInputBorderRadius};
   padding-bottom: 1px;
   margin: 0;
   height: auto;

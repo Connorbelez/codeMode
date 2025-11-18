@@ -58,8 +58,7 @@ export function OrganizationsSection() {
         </div>
         <Card>
           <div className="text-description py-8 text-center text-sm">
-            Organizations are only available with cloud accounts. Sign in to
-            manage organizations.
+            Organizations are only available with cloud accounts.
           </div>
         </Card>
       </>

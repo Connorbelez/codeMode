@@ -9,6 +9,7 @@
  */
 
 import { exec, spawn } from "child_process";
+import { createHash } from "crypto";
 import fs from "fs/promises";
 import path from "path";
 import { promisify } from "util";
@@ -49,6 +50,7 @@ import {
 } from "./utils";
 
 const execAsync = promisify(exec);
+const EXTERNAL_SESSION_PREFIX = "external-wt-";
 
 /**
  * Singleton manager for git worktree operations.
@@ -159,6 +161,8 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     await this.validateAllWorktrees();
 
     this.initialized = true;
+
+    await this.syncRegistry();
   }
 
   /**
@@ -1051,25 +1055,40 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
    * Synchronize registry with actual git worktrees.
    */
   public async syncRegistry(): Promise<void> {
-    this.ensureInitialized();
+    if (!this.initialized) {
+      return;
+    }
 
-    // Get all git worktrees
     const gitWorktrees = await this.gitOps.listWorktrees();
+    const gitPaths = new Set<string>();
 
-    // Remove orphaned entries (in registry but not in git)
-    const registryIds = new Set(this.sessions.keys());
-    const gitPaths = new Set(gitWorktrees.map((w) => w.path));
+    for (const worktree of gitWorktrees) {
+      const normalizedPath = path.isAbsolute(worktree.path)
+        ? worktree.path
+        : path.join(this.repositoryPath, worktree.path);
 
-    for (const sessionId of registryIds) {
-      const session = this.sessions.get(sessionId);
-      if (session && !gitPaths.has(session.worktreePath)) {
+      gitPaths.add(normalizedPath);
+
+      // Skip the primary workspace entry
+      if (normalizedPath === this.repositoryPath) {
+        continue;
+      }
+
+      const existing = this.getSessionByPath(normalizedPath);
+      if (!existing) {
+        await this.importGitWorktree(normalizedPath, worktree.branch);
+      }
+    }
+
+    for (const [sessionId, session] of Array.from(this.sessions.entries())) {
+      if (session.worktreePath === this.repositoryPath) {
+        continue;
+      }
+      if (!gitPaths.has(session.worktreePath)) {
         await this.registry.remove(sessionId);
         this.sessions.delete(sessionId);
       }
     }
-
-    // Note: We don't add missing worktrees from git to registry
-    // because they may not be managed by this system
   }
 
   // =========================================================================
@@ -1148,6 +1167,69 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
   // =========================================================================
   // Private Helpers
   // =========================================================================
+
+  private getSessionByPath(worktreePath: string): WorktreeSession | undefined {
+    const normalized = path.resolve(worktreePath);
+    for (const session of this.sessions.values()) {
+      if (path.resolve(session.worktreePath) === normalized) {
+        return session;
+      }
+    }
+    return undefined;
+  }
+
+  private generateExternalSessionId(worktreePath: string): string {
+    const hash = createHash("sha1").update(worktreePath).digest("hex");
+    return `${EXTERNAL_SESSION_PREFIX}${hash.slice(0, 12)}`;
+  }
+
+  private async importGitWorktree(
+    worktreePath: string,
+    branchName: string,
+  ): Promise<WorktreeSession> {
+    const now = new Date();
+    const sessionId = this.generateExternalSessionId(worktreePath);
+    const branch = branchName || path.basename(worktreePath);
+
+    const session: WorktreeSession = {
+      id: sessionId,
+      agentSessionId: "external",
+      worktreePath,
+      branchName: branch,
+      parentBranch: branch,
+      status: "active",
+      createdAt: now,
+      lastAccessedAt: now,
+      description: "Imported from existing git worktree",
+      metadata: {
+        hasUncommittedChanges: false,
+        hasUnpushedCommits: false,
+        commitsAhead: 0,
+        commitsBehind: 0,
+        filesChanged: 0,
+        diffStats: {
+          additions: 0,
+          deletions: 0,
+        },
+        diskUsageBytes: 0,
+        lastRefreshedAt: now,
+      },
+    };
+
+    this.sessions.set(sessionId, session);
+    await this.registry.upsert(session);
+
+    try {
+      await this.refreshWorktreeMetadata(sessionId);
+    } catch (error) {
+      console.warn(
+        `[WorktreeManager] Failed to refresh metadata for imported worktree ${sessionId}:`,
+        error,
+      );
+    }
+
+    return session;
+  }
 
   /**
    * Ensure manager is initialized.

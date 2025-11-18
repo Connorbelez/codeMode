@@ -14,6 +14,7 @@ import useIsOSREnabled from "../../../hooks/useIsOSREnabled";
 import useUpdatingRef from "../../../hooks/useUpdatingRef";
 import { useAppDispatch, useAppSelector } from "../../../redux/hooks";
 import { selectSelectedChatModel } from "../../../redux/slices/configSlice";
+import type { WorktreeLaunchControl } from "../../WorktreeMode/types";
 import InputToolbar, { ToolbarOptions } from "../InputToolbar";
 import { ComboBoxItem } from "../types";
 import { DragOverlay } from "./components/DragOverlay";
@@ -41,6 +42,7 @@ export interface TipTapEditorProps {
   // TODO: This isn't actually used anywhere in this component, but it appears
   // to be pulled into some of our TipTap extensions.
   inputId: string;
+  worktreeLaunchControl?: WorktreeLaunchControl;
 }
 
 export const TIPPY_DIV_ID = "tippy-js-div";
@@ -264,7 +266,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
         event.preventDefault();
       }}
     >
-      <div className="px-2.5 pb-1 pt-2">
+      <div className="px-4 pb-3 pt-3">
         <EditorContent
           className={`scroll-container overflow-y-scroll ${props.isMainInput ? "max-h-[70vh]" : ""}`}
           spellCheck={false}
@@ -297,6 +299,7 @@ function TipTapEditorInner(props: TipTapEditorProps) {
             });
           }}
           disabled={isStreaming}
+          worktreeLaunchControl={props.worktreeLaunchControl}
         />
       </div>
 
@@ -333,6 +336,9 @@ const MemoInner = memo(
     prev.placeholder === next.placeholder &&
     prev.historyKey === next.historyKey &&
     prev.inputId === next.inputId &&
+    prev.worktreeLaunchControl?.enabled ===
+      next.worktreeLaunchControl?.enabled &&
+    prev.worktreeLaunchControl?.busy === next.worktreeLaunchControl?.busy &&
     toolbarOptionsEqual(prev.toolbarOptions, next.toolbarOptions) &&
     (prev.availableContextProviders?.length || 0) ===
       (next.availableContextProviders?.length || 0) &&

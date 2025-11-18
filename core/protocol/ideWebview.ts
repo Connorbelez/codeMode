@@ -14,6 +14,15 @@ import {
   SetCodeToEditPayload,
   ShowFilePayload,
 } from "../";
+import type {
+  WorktreeCreateRequestPayload,
+  WorktreeMergeRequestPayload,
+  WorktreeRemoveRequestPayload,
+  WorktreeSession,
+  WorktreeSessionWithStats,
+  WorktreeStatusRequestPayload,
+  WorktreeSwitchRequestPayload,
+} from "../worktree/types";
 
 export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
   openUrl: [string, void];
@@ -84,6 +93,18 @@ export type ToIdeFromWebviewProtocol = ToIdeFromWebviewOrCoreProtocol & {
     },
     void,
   ];
+  "worktree/list": [
+    { repositoryPath?: string } | undefined,
+    WorktreeSessionWithStats[],
+  ];
+  "worktree/getStatus": [
+    WorktreeStatusRequestPayload,
+    WorktreeSessionWithStats,
+  ];
+  "worktree/create": [WorktreeCreateRequestPayload, WorktreeSession];
+  "worktree/switch": [WorktreeSwitchRequestPayload, void];
+  "worktree/merge": [WorktreeMergeRequestPayload, void];
+  "worktree/remove": [WorktreeRemoveRequestPayload, void];
 };
 
 export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {
@@ -115,4 +136,5 @@ export type ToWebviewFromIdeProtocol = ToWebviewFromIdeOrCoreProtocol & {
   focusEdit: [undefined, void];
   generateRule: [undefined, void];
   addToChat: [AddToChatPayload, void];
+  "worktree/statusUpdate": [WorktreeSessionWithStats, void];
 };

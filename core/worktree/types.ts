@@ -132,6 +132,43 @@ export interface TestResult {
 }
 
 // ============================================================================
+// UI Helper Types
+// ============================================================================
+
+/**
+ * Lightweight summary of diff statistics for UI display
+ */
+export interface WorktreeDiffSummary {
+  /** Number of files changed */
+  filesChanged: number;
+
+  /** Lines added */
+  linesAdded: number;
+
+  /** Lines removed */
+  linesRemoved: number;
+
+  /** When stats were last refreshed */
+  lastChecked?: Date;
+}
+
+/**
+ * User-facing status buckets for worktree UI
+ */
+export type WorktreeAgentStatus = "working" | "idle" | "completed" | "error";
+
+/**
+ * Worktree session enriched with UI-specific metadata
+ */
+export interface WorktreeSessionWithStats extends WorktreeSession {
+  /** Snapshot of diff statistics for quick display */
+  diffStats?: WorktreeDiffSummary;
+
+  /** Simplified agent status */
+  agentStatus?: WorktreeAgentStatus;
+}
+
+// ============================================================================
 // Configuration Types
 // ============================================================================
 
@@ -319,6 +356,64 @@ export interface RemoveOptions {
 
   /** Backup worktree before removal */
   createBackup?: boolean;
+}
+
+// ============================================================================
+// Protocol Payload Types
+// ============================================================================
+
+/**
+ * Payload used when the UI requests creation of a worktree
+ */
+export interface WorktreeCreateRequestPayload {
+  /** Optional repository override */
+  repositoryPath?: string;
+
+  /** Agent/session identifier */
+  agentSessionId: string;
+
+  /** Manager creation options */
+  options?: CreateWorktreeOptions;
+}
+
+/**
+ * Payload for switching the IDE into an existing worktree
+ */
+export interface WorktreeSwitchRequestPayload {
+  /** Worktree session identifier */
+  sessionId: string;
+
+  /** Optional repository override */
+  repositoryPath?: string;
+
+  /** Whether to open in a new window */
+  openInNewWindow?: boolean;
+}
+
+/**
+ * Payload for listing, merging, or removing worktrees scoped to a repo
+ */
+export interface WorktreeScopedRequestPayload {
+  /** Target repository path */
+  repositoryPath?: string;
+}
+
+export interface WorktreeMergeRequestPayload
+  extends WorktreeScopedRequestPayload {
+  sessionId: string;
+  options?: MergeOptions;
+}
+
+export interface WorktreeRemoveRequestPayload
+  extends WorktreeScopedRequestPayload {
+  sessionId: string;
+  force?: boolean;
+  deleteBranch?: boolean;
+}
+
+export interface WorktreeStatusRequestPayload
+  extends WorktreeScopedRequestPayload {
+  sessionId: string;
 }
 
 // ============================================================================

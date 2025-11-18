@@ -6,11 +6,12 @@ import {
   SlashCommandSource,
 } from "core";
 import { memo, useMemo } from "react";
-import { defaultBorderRadius } from "..";
 import { useAppSelector } from "../../redux/hooks";
 import { selectSlashCommandComboBoxInputs } from "../../redux/selectors";
+import type { WorktreeLaunchControl } from "../WorktreeMode/types";
 import { ContextItemsPeek } from "./belowMainInput/ContextItemsPeek";
 import { RulesPeek } from "./belowMainInput/RulesPeek";
+import { chatInputBorderRadius } from "./constants";
 import { ElectricBorder } from "./ElectricBorder";
 import { ToolbarOptions } from "./InputToolbar";
 import { Lump } from "./Lump";
@@ -29,6 +30,7 @@ interface ContinueInputBoxProps {
   appliedRules?: RuleMetadata[];
   hidden?: boolean;
   inputId: string; // used to keep track of things per input in redux
+  worktreeLaunchControl?: WorktreeLaunchControl;
 }
 
 const EDIT_DISALLOWED_CONTEXT_PROVIDERS = [
@@ -116,7 +118,7 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
         {props.isMainInput && <Lump />}
         <ElectricBorder
           $loading={isStreaming && (props.isLastUserInput || isInEdit) ? 1 : 0}
-          $borderRadius={defaultBorderRadius}
+          $borderRadius={chatInputBorderRadius}
         >
           <TipTapEditor
             editorState={props.editorState}
@@ -128,6 +130,7 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
             historyKey={historyKey}
             toolbarOptions={toolbarOptions}
             inputId={props.inputId}
+            worktreeLaunchControl={props.worktreeLaunchControl}
           />
         </ElectricBorder>
       </div>

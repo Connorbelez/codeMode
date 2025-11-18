@@ -22,6 +22,8 @@ import ModelSelect from "../modelSelection/ModelSelect";
 import { ModeSelect } from "../ModeSelect";
 import { Button } from "../ui";
 import { useFontSize } from "../ui/font";
+import type { WorktreeLaunchControl } from "../WorktreeMode/types";
+import { WorktreeLaunchButton } from "../WorktreeMode/WorktreeLaunchButton";
 import ContextStatus from "./ContextStatus";
 import HoverItem from "./InputToolbar/HoverItem";
 
@@ -43,6 +45,7 @@ interface InputToolbarProps {
   toolbarOptions?: ToolbarOptions;
   disabled?: boolean;
   isMainInput?: boolean;
+  worktreeLaunchControl?: WorktreeLaunchControl;
 }
 
 function InputToolbar(props: InputToolbarProps) {
@@ -57,7 +60,9 @@ function InputToolbar(props: InputToolbarProps) {
     (store) => store.session.hasReasoningEnabled,
   );
   const isEnterDisabled =
-    props.disabled || (isInEdit && codeToEdit.length === 0);
+    props.disabled ||
+    (isInEdit && codeToEdit.length === 0) ||
+    props.worktreeLaunchControl?.busy;
 
   const supportsImages =
     defaultModel &&
@@ -72,6 +77,9 @@ function InputToolbar(props: InputToolbarProps) {
 
   const smallFont = useFontSize(-2);
   const tinyFont = useFontSize(-3);
+
+  const showWorktreeToggle =
+    props.isMainInput && !isInEdit && props.worktreeLaunchControl;
 
   return (
     <>
@@ -166,6 +174,11 @@ function InputToolbar(props: InputToolbarProps) {
           }}
         >
           {!isInEdit && <ContextStatus />}
+          {showWorktreeToggle && (
+            <div className="hidden md:block">
+              <WorktreeLaunchButton {...props.worktreeLaunchControl!} />
+            </div>
+          )}
           {!props.toolbarOptions?.hideUseCodebase && !isInEdit && (
             <div className="hidden transition-colors duration-200 hover:underline md:flex">
               <HoverItem
@@ -236,6 +249,11 @@ function InputToolbar(props: InputToolbarProps) {
             </Button>
           </ToolTip>
         </div>
+        {showWorktreeToggle && (
+          <div className="mt-2 w-full md:hidden">
+            <WorktreeLaunchButton {...props.worktreeLaunchControl!} />
+          </div>
+        )}
       </div>
     </>
   );
@@ -260,5 +278,8 @@ export default memo(
     prev.disabled === next.disabled &&
     prev.isMainInput === next.isMainInput &&
     prev.activeKey === next.activeKey &&
+    prev.worktreeLaunchControl?.enabled ===
+      next.worktreeLaunchControl?.enabled &&
+    prev.worktreeLaunchControl?.busy === next.worktreeLaunchControl?.busy &&
     shallowToolbarOptionsEqual(prev.toolbarOptions, next.toolbarOptions),
 );

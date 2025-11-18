@@ -5,6 +5,7 @@ import {
 import { Editor, JSONContent } from "@tiptap/react";
 import { ChatHistoryItem, InputModifiers } from "core";
 import { renderChatMessage } from "core/util/messageContent";
+import type { WorktreeSession } from "core/worktree/types";
 import {
   useCallback,
   useContext,
@@ -24,6 +25,11 @@ import ContinueInputBox from "../../components/mainInput/ContinueInputBox";
 import { useOnboardingCard } from "../../components/OnboardingCard";
 import StepContainer from "../../components/StepContainer";
 import { TabBar } from "../../components/TabBar/TabBar";
+import {
+  WorktreeSessionsPanel,
+  type WorktreeLaunchControl,
+  type WorktreeLaunchOptions,
+} from "../../components/WorktreeMode";
 import { IdeMessengerContext } from "../../context/IdeMessenger";
 import { useWebviewListener } from "../../hooks/useWebviewListener";
 import { useAppDispatch, useAppSelector } from "../../redux/hooks";
@@ -65,6 +71,48 @@ function findLatestSummaryIndex(history: ChatHistoryItem[]): number {
     }
   }
   return -1; // No summary found
+}
+
+type SuccessMessage<T> = { status: "success"; content: T };
+type ErrorMessage = { status: "error"; error?: string };
+
+function isSuccessMessage<T>(result: unknown): result is SuccessMessage<T> {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as any).status === "success"
+  );
+}
+
+function isErrorMessage(result: unknown): result is ErrorMessage {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    (result as any).status === "error"
+  );
+}
+
+function flattenEditorText(content?: JSONContent): string {
+  if (!content) {
+    return "";
+  }
+
+  const parts: string[] = [];
+
+  const traverse = (node?: JSONContent) => {
+    if (!node) {
+      return;
+    }
+    if (typeof node.text === "string") {
+      parts.push(node.text);
+    }
+    if (Array.isArray(node.content)) {
+      node.content.forEach((child) => traverse(child as JSONContent));
+    }
+  };
+
+  traverse(content);
+  return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 const StepsDiv = styled.div`
@@ -122,6 +170,82 @@ export function Chat() {
   );
   const codeToEdit = useAppSelector((state) => state.editModeState.codeToEdit);
   const isInEdit = useAppSelector((store) => store.session.isInEdit);
+  const [worktreeLaunchEnabled, setWorktreeLaunchEnabled] = useState(false);
+  const [worktreeOptions, setWorktreeOptions] = useState<WorktreeLaunchOptions>(
+    {},
+  );
+  const [isCreatingWorktree, setIsCreatingWorktree] = useState(false);
+  const handleWorktreeEnabledChange = useCallback((value: boolean) => {
+    setWorktreeLaunchEnabled(value);
+  }, []);
+  const handleWorktreeOptionsChange = useCallback(
+    (updates: Partial<WorktreeLaunchOptions>) => {
+      setWorktreeOptions((prev) => ({ ...prev, ...updates }));
+    },
+    [],
+  );
+  const worktreeLaunchControl = useMemo<WorktreeLaunchControl>(() => {
+    return {
+      enabled: worktreeLaunchEnabled,
+      busy: isCreatingWorktree,
+      options: worktreeOptions,
+      onEnabledChange: handleWorktreeEnabledChange,
+      onOptionsChange: handleWorktreeOptionsChange,
+    };
+  }, [
+    worktreeLaunchEnabled,
+    isCreatingWorktree,
+    worktreeOptions,
+    handleWorktreeEnabledChange,
+    handleWorktreeOptionsChange,
+  ]);
+
+  const ensureWorktreeIfNeeded = useCallback(
+    async (editorState: JSONContent, snapshot: RootState) => {
+      if (!worktreeLaunchEnabled || snapshot.session.isInEdit) {
+        return;
+      }
+
+      setIsCreatingWorktree(true);
+      try {
+        const plainText = flattenEditorText(editorState);
+        const description =
+          worktreeOptions.description?.trim() ||
+          (plainText ? plainText.slice(0, 80) : undefined);
+        const baseBranch = worktreeOptions.baseBranch?.trim() || undefined;
+        const result = await ideMessenger.request("worktree/create", {
+          agentSessionId: snapshot.session.id,
+          options: {
+            baseBranch,
+            description,
+          },
+        });
+
+        if (isErrorMessage(result)) {
+          throw new Error(result.error ?? "Failed to create worktree");
+        }
+
+        if (isSuccessMessage<WorktreeSession>(result)) {
+          ideMessenger.post("showToast", [
+            "info",
+            `Created worktree ${result.content.branchName}`,
+          ]);
+        }
+      } catch (error) {
+        const message = (error as Error).message ?? "Failed to create worktree";
+        ideMessenger.post("showToast", ["error", message]);
+        throw error;
+      } finally {
+        setIsCreatingWorktree(false);
+      }
+    },
+    [
+      ideMessenger,
+      worktreeLaunchEnabled,
+      worktreeOptions.baseBranch,
+      worktreeOptions.description,
+    ],
+  );
 
   const lastSessionId = useAppSelector((state) => state.session.lastSessionId);
   const allSessionMetadata = useAppSelector(
@@ -163,7 +287,7 @@ export function Chat() {
   );
 
   const sendInput = useCallback(
-    (
+    async (
       editorState: JSONContent,
       modifiers: InputModifiers,
       index?: number,
@@ -263,6 +387,11 @@ export function Chat() {
           }),
         );
       } else {
+        try {
+          await ensureWorktreeIfNeeded(editorState, stateSnapshot);
+        } catch {
+          return;
+        }
         void dispatch(streamResponseThunk({ editorState, modifiers, index }));
 
         if (editorToClearOnSend) {
@@ -270,7 +399,13 @@ export function Chat() {
         }
       }
     },
-    [dispatch, ideMessenger, reduxStore, setIsCreatingAgent],
+    [
+      dispatch,
+      ideMessenger,
+      reduxStore,
+      setIsCreatingAgent,
+      ensureWorktreeIfNeeded,
+    ],
   );
 
   useWebviewListener(
@@ -325,7 +460,7 @@ export function Chat() {
         return (
           <ContinueInputBox
             onEnter={(editorState, modifiers) =>
-              sendInput(editorState, modifiers, index)
+              void sendInput(editorState, modifiers, index)
             }
             isLastUserInput={isLastUserInput(index)}
             isMainInput={false}
@@ -454,9 +589,10 @@ export function Chat() {
           isMainInput
           isLastUserInput={false}
           onEnter={(editorState, modifiers, editor) =>
-            sendInput(editorState, modifiers, undefined, editor)
+            void sendInput(editorState, modifiers, undefined, editor)
           }
           inputId={MAIN_EDITOR_INPUT_ID}
+          worktreeLaunchControl={worktreeLaunchControl}
         />
 
         <CliInstallBanner
@@ -464,6 +600,8 @@ export function Chat() {
           sessionThreshold={3}
           permanentDismissal={true}
         />
+
+        <WorktreeSessionsPanel className="mt-3" />
 
         <div
           style={{
