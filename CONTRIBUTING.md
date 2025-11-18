@@ -1,6 +1,6 @@
-# Contributing to Code Mode
+# Contributing to CodeModo
 
-Thank you for your interest in contributing to Code Mode! This document provides guidelines for contributing to this project.
+Thank you for your interest in contributing to CodeModo! This document provides guidelines for contributing to this project.
 
 ---
 
@@ -128,6 +128,7 @@ Fixes #issue-number
 ```
 
 **Types:**
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -137,6 +138,7 @@ Fixes #issue-number
 - `chore`: Maintenance tasks
 
 **Examples:**
+
 ```
 feat(mcp): add support for WebSocket transport
 
@@ -193,17 +195,18 @@ npm run format:check
 - Use descriptive test names
 
 **Example:**
+
 ```typescript
-describe('McpWrapperGenerator', () => {
-  it('should convert JSON Schema to TypeScript types', () => {
+describe("McpWrapperGenerator", () => {
+  it("should convert JSON Schema to TypeScript types", () => {
     // Test implementation
   });
 
-  it('should handle optional parameters correctly', () => {
+  it("should handle optional parameters correctly", () => {
     // Test implementation
   });
 
-  it('should throw error for invalid schemas', () => {
+  it("should throw error for invalid schemas", () => {
     // Test implementation
   });
 });
@@ -217,20 +220,21 @@ describe('McpWrapperGenerator', () => {
 codeMode/
 ├── core/                    # Core functionality
 │   ├── tools/              # Tool implementations
-│   │   └── executeCode.ts  # Code Mode implementation (MCP wrapper gen, E2B, IPC)
+│   │   └── executeCode.ts  # CodeModo implementation (MCP wrapper gen, E2B, IPC)
 │   └── context/mcp/        # MCP integration
 ├── examples/               # Example workflows
 │   └── advanced-composition/  # Production examples
 ├── docs/                   # Documentation
-├── extensions/             # IDE extensions (Continue.dev)
+├── extensions/             # IDE extensions (CodeModo.dev)
 │   ├── vscode/
 │   └── cli/
 └── packages/               # Shared packages
 ```
 
-### Key Files for Code Mode
+### Key Files for CodeModo
 
-- **`core/tools/implementations/executeCode.ts`** - Main Code Mode implementation
+- **`core/tools/implementations/executeCode.ts`** - Main CodeModo implementation
+
   - `McpWrapperGenerator` - Generates TypeScript from MCP schemas
   - `McpRequestMonitor` - Handles sandbox IPC
   - `globalThis.__mcp_invoke` - Bridge function
@@ -264,19 +268,19 @@ Look for issues labeled `good-first-issue`:
 
 - **Questions?** Open a [GitHub discussion](https://github.com/Connorbelez/codeMode/discussions)
 - **Issues?** Check [existing issues](https://github.com/Connorbelez/codeMode/issues) or create a new one
-- **Continue.dev** - Join the [Continue Discord](https://discord.gg/vapESyrFmJ) for general questions
+- **CodeModo.dev** - Join the [CodeModo Discord](https://discord.gg/vapESyrFmJ) for general questions
 
 ---
 
 ## Attribution & Licensing
 
-### Code Mode Enhancements
+### CodeModo Enhancements
 
-Code Mode enhancements are authored by **Connor Belez** and contributors.
+CodeModo enhancements are authored by **Connor Belez** and contributors.
 
-### Continue.dev Framework
+### CodeModo.dev Framework
 
-This project builds on Continue.dev (Apache 2.0). When modifying Continue.dev code:
+This project builds on CodeModo.dev (Apache 2.0). When modifying CodeModo.dev code:
 
 1. Preserve original copyright notices
 2. Document changes clearly
@@ -286,28 +290,29 @@ See [ATTRIBUTION.md](ATTRIBUTION.md) for detailed attribution.
 
 ### License
 
-By contributing to Code Mode, you agree that your contributions will be licensed under the Apache 2.0 License.
+By contributing to CodeModo, you agree that your contributions will be licensed under the Apache 2.0 License.
 
 ---
 
 ## Development Notes
 
-### Code Mode Specific
+### CodeModo Specific
 
 - **Token reduction is the priority** - Always consider token impact
 - **Backwards compatibility** - Works with any MCP server out of the box
 - **Type safety** - Generated TypeScript must be type-safe
 - **Examples over docs** - Show, don't tell
 
-### Continue.dev Framework
+### CodeModo.dev Framework
 
-For questions about the underlying Continue.dev framework:
-- See [Continue.dev docs](https://docs.continue.dev)
-- Join [Continue Discord](https://discord.gg/vapESyrFmJ)
-- Read the [Continue contributing guide](https://github.com/continuedev/continue/blob/main/CONTRIBUTING.md)
+For questions about the underlying CodeModo.dev framework:
+
+- See [CodeModo.dev docs](https://docs.continue.dev)
+- Join [CodeModo Discord](https://discord.gg/vapESyrFmJ)
+- Read the [CodeModo contributing guide](https://github.com/continuedev/continue/blob/main/CONTRIBUTING.md)
 
 ---
 
-Thank you for contributing to Code Mode! 🚀
+Thank you for contributing to CodeModo! 🚀
 
 Your contributions help make AI agent workflows more efficient and cost-effective for everyone.

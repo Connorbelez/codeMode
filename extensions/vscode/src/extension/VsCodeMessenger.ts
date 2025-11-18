@@ -20,6 +20,9 @@ import {
   sanitizeShellArgument,
   validateGitHubRepoUrl,
 } from "core/util/sanitization";
+import type { MergeOptions, WorktreeSession } from "core/worktree/types";
+import { WorktreeManagerSingleton } from "core/worktree/WorktreeManagerSingleton";
+import path from "path";
 import * as vscode from "vscode";
 
 import { ApplyManager } from "../apply";
@@ -33,8 +36,10 @@ import {
 import { handleLLMError } from "../util/errorHandling";
 import { showTutorial } from "../util/tutorial";
 import { getExtensionUri } from "../util/vscode";
+import { enrichSessionWithStats } from "../util/worktreeHelpers";
 import { VsCodeIde } from "../VsCodeIde";
 import { VsCodeWebviewProtocol } from "../webviewProtocol";
+import { WorktreeWorkspaceManager } from "../worktree/WorkspaceManager";
 
 import { encodeFullSlug } from "../../../../packages/config-yaml/dist";
 import { VsCodeExtension } from "./VsCodeExtension";
@@ -47,6 +52,8 @@ type ToIdeOrWebviewFromCoreProtocol = ToIdeFromCoreProtocol &
  * so we don't have to rewrite some of the handlers
  */
 export class VsCodeMessenger {
+  private readonly worktreeEventRepos = new Set<string>();
+  private readonly workspaceManager: WorktreeWorkspaceManager;
   onWebview<T extends keyof FromWebviewProtocol>(
     messageType: T,
     handler: (
@@ -93,6 +100,7 @@ export class VsCodeMessenger {
     private readonly context: vscode.ExtensionContext,
     private readonly vsCodeExtension: VsCodeExtension,
   ) {
+    this.workspaceManager = new WorktreeWorkspaceManager(context);
     /** WEBVIEW ONLY LISTENERS **/
     this.onWebview("showFile", (msg) => {
       this.ide.openFile(msg.data.filepath);
@@ -832,5 +840,204 @@ export class VsCodeMessenger {
     this.onWebviewOrCore("reportError", async (msg) => {
       await handleLLMError(msg.data);
     });
+
+    this.registerWorktreeHandlers();
+  }
+
+  private registerWorktreeHandlers(): void {
+    this.onWebview("worktree/list", async ({ data }) => {
+      return this.withWorktreeManager(data?.repositoryPath, async (manager) => {
+        const sessions = manager.listWorktrees();
+        const enriched = await Promise.all(
+          sessions.map((session) => enrichSessionWithStats(session, manager)),
+        );
+        const activePath = this.workspaceManager.getActiveWorktreePath();
+        return enriched.map((session) =>
+          this.annotateActiveState(session, activePath),
+        );
+      });
+    });
+
+    this.onWebview("worktree/getStatus", async ({ data }) => {
+      return this.withWorktreeManager(data.repositoryPath, async (manager) => {
+        const session = manager.getWorktree(data.sessionId);
+        if (!session) {
+          throw new Error(
+            `Worktree session ${data.sessionId} not found for status request`,
+          );
+        }
+        return enrichSessionWithStats(session, manager, {
+          refreshIfStale: true,
+        });
+      });
+    });
+
+    this.onWebview("worktree/create", async ({ data }) => {
+      return this.withWorktreeManager(data.repositoryPath, async (manager) => {
+        const session = await manager.createWorktree(
+          data.agentSessionId,
+          data.options,
+        );
+        void this.emitWorktreeUpdate(manager, session);
+        return session;
+      });
+    });
+
+    this.onWebview("worktree/switch", async ({ data }) => {
+      return this.withWorktreeManager(data.repositoryPath, async (manager) => {
+        const session = manager.getWorktree(data.sessionId);
+        if (!session) {
+          throw new Error(`Worktree session ${data.sessionId} not found`);
+        }
+        if (data.openInNewWindow) {
+          const uri = vscode.Uri.file(session.worktreePath);
+          await vscode.commands.executeCommand("vscode.openFolder", uri, {
+            forceNewWindow: true,
+          });
+          return;
+        }
+
+        await this.workspaceManager.activateWorktree(session.worktreePath);
+        void this.emitWorktreeUpdate(manager, session);
+      });
+    });
+
+    this.onWebview("worktree/resetActive", async ({ data }) => {
+      return this.withWorktreeManager(data?.repositoryPath, async (manager) => {
+        const previous = await this.workspaceManager.resetActiveWorktree();
+        if (previous) {
+          const session = manager
+            .listWorktrees()
+            .find(
+              (entry) =>
+                path.resolve(entry.worktreePath) === path.resolve(previous),
+            );
+          if (session) {
+            void this.emitWorktreeUpdate(manager, session);
+          }
+        }
+      });
+    });
+
+    this.onWebview("worktree/merge", async ({ data }) => {
+      return this.withWorktreeManager(data.repositoryPath, async (manager) => {
+        const session = manager.getWorktree(data.sessionId);
+        if (!session) {
+          throw new Error(`Worktree session ${data.sessionId} not found`);
+        }
+        const mergeOptions: MergeOptions = {
+          strategy:
+            data.options?.strategy ||
+            manager.getConfig().ui.defaultMergeStrategy,
+          targetBranch: data.options?.targetBranch,
+          commitMessage: data.options?.commitMessage,
+          deleteAfterMerge: data.options?.deleteAfterMerge,
+          allowUncommitted: data.options?.allowUncommitted,
+          runTests: data.options?.runTests,
+        };
+        await manager.mergeWorktree(session.id, mergeOptions);
+        void this.emitWorktreeUpdate(manager, session);
+      });
+    });
+
+    this.onWebview("worktree/remove", async ({ data }) => {
+      return this.withWorktreeManager(data.repositoryPath, async (manager) => {
+        const session = manager.getWorktree(data.sessionId);
+        if (!session) {
+          throw new Error(`Worktree session ${data.sessionId} not found`);
+        }
+        await manager.removeWorktree(session.id, {
+          force: data.force,
+          deleteBranch: data.deleteBranch,
+        });
+      });
+    });
+  }
+
+  private async withWorktreeManager<T>(
+    repositoryPath: string | undefined,
+    fn: (manager: WorktreeManagerSingleton, repoPath: string) => Promise<T> | T,
+  ): Promise<T> {
+    const repoPath =
+      await this.workspaceManager.resolveRepositoryPath(repositoryPath);
+    if (!repoPath) {
+      throw new Error(
+        "Worktree launch requires a Git repository. Open Continue in a project folder that contains a .git directory and try again.",
+      );
+    }
+
+    const manager = WorktreeManagerSingleton.getInstance(repoPath);
+    await manager.initialize();
+    await manager.syncRegistry();
+    this.ensureWorktreeForwarders(repoPath, manager);
+    return fn(manager, repoPath);
+  }
+
+  private ensureWorktreeForwarders(
+    repoPath: string,
+    manager: WorktreeManagerSingleton,
+  ): void {
+    if (this.worktreeEventRepos.has(repoPath)) {
+      return;
+    }
+
+    const emitSession = async (session: WorktreeSession) => {
+      await this.emitWorktreeUpdate(manager, session);
+    };
+
+    const emitById = async (sessionId: string) => {
+      const session = manager.getWorktree(sessionId);
+      if (session) {
+        await this.emitWorktreeUpdate(manager, session);
+      }
+    };
+
+    manager.on("created", (event) => {
+      if (event.type === "created") {
+        void emitSession(event.session);
+      }
+    });
+
+    manager.on("metadata_updated", (event) => {
+      if (event.type === "metadata_updated") {
+        void emitById(event.sessionId);
+      }
+    });
+
+    manager.on("status_changed", (event) => {
+      if (event.type === "status_changed") {
+        void emitById(event.sessionId);
+      }
+    });
+
+    manager.on("merged", (event) => {
+      if (event.type === "merged") {
+        void emitById(event.sessionId);
+      }
+    });
+
+    this.worktreeEventRepos.add(repoPath);
+  }
+
+  private async emitWorktreeUpdate(
+    manager: WorktreeManagerSingleton,
+    session: WorktreeSession,
+  ): Promise<void> {
+    const enriched = this.annotateActiveState(
+      await enrichSessionWithStats(session, manager),
+    );
+    this.webviewProtocol.send("worktree/statusUpdate", enriched);
+  }
+
+  private annotateActiveState<T extends { worktreePath: string }>(
+    session: T,
+    activePath = this.workspaceManager.getActiveWorktreePath(),
+  ): T & { isActive?: boolean } {
+    if (!activePath) {
+      return session;
+    }
+    const isActive =
+      path.resolve(session.worktreePath) === path.resolve(activePath);
+    return isActive ? { ...session, isActive } : session;
   }
 }

@@ -5,11 +5,11 @@
  * multiple executions in the same conversation.
  *
  * Traditional Tool Calling: No state persistence between calls
- * Code Mode: globalThis for cross-execution state
+ * CodeModo: globalThis for cross-execution state
  * Token Reduction: 99.1% on subsequent calls
  */
 
-import { github } from '/mcp';
+import { github } from "/mcp";
 
 // Initialize persistent cache (survives across executions in same conversation)
 globalThis.repoCache = globalThis.repoCache || {
@@ -18,12 +18,12 @@ globalThis.repoCache = globalThis.repoCache || {
   stats: {
     cacheHits: 0,
     cacheMisses: 0,
-    apiCallsSaved: 0
-  }
+    apiCallsSaved: 0,
+  },
 };
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const ORG = 'myorg';
+const ORG = "myorg";
 
 // Utility: Check if cache is fresh
 function isCacheFresh(repoName: string): boolean {
@@ -53,18 +53,18 @@ async function getRepositoryData(repoName: string) {
   const [repo, issues, pullRequests] = await Promise.all([
     github.getRepository({
       owner: ORG,
-      repo: repoName
+      repo: repoName,
     }),
     github.listIssues({
       owner: ORG,
       repo: repoName,
-      state: 'open'
+      state: "open",
     }),
     github.listPullRequests({
       owner: ORG,
       repo: repoName,
-      state: 'open'
-    })
+      state: "open",
+    }),
   ]);
 
   // Calculate metrics
@@ -79,19 +79,19 @@ async function getRepositoryData(repoName: string) {
     language: repo.language,
     lastUpdated: repo.updated_at,
     topics: repo.topics || [],
-    issues: issues.map(i => ({
+    issues: issues.map((i) => ({
       number: i.number,
       title: i.title,
-      labels: i.labels.map(l => l.name),
-      created: i.created_at
+      labels: i.labels.map((l) => l.name),
+      created: i.created_at,
     })),
-    prs: pullRequests.map(pr => ({
+    prs: pullRequests.map((pr) => ({
       number: pr.number,
       title: pr.title,
       author: pr.user.login,
-      created: pr.created_at
+      created: pr.created_at,
     })),
-    healthScore: calculateHealthScore(repo, issues, pullRequests)
+    healthScore: calculateHealthScore(repo, issues, pullRequests),
   };
 
   // Update cache
@@ -106,8 +106,9 @@ function calculateHealthScore(repo: any, issues: any[], prs: any[]): number {
   let score = 100;
 
   // Deduct points for old PRs
-  const oldPRs = prs.filter(pr => {
-    const daysSinceCreation = (Date.now() - new Date(pr.created_at).getTime()) / (1000 * 60 * 60 * 24);
+  const oldPRs = prs.filter((pr) => {
+    const daysSinceCreation =
+      (Date.now() - new Date(pr.created_at).getTime()) / (1000 * 60 * 60 * 24);
     return daysSinceCreation > 14;
   });
   score -= oldPRs.length * 5;
@@ -119,7 +120,8 @@ function calculateHealthScore(repo: any, issues: any[], prs: any[]): number {
   }
 
   // Deduct for stale repository (not updated in 90 days)
-  const daysSinceUpdate = (Date.now() - new Date(repo.updated_at).getTime()) / (1000 * 60 * 60 * 24);
+  const daysSinceUpdate =
+    (Date.now() - new Date(repo.updated_at).getTime()) / (1000 * 60 * 60 * 24);
   if (daysSinceUpdate > 90) score -= 30;
 
   // Bonus for active maintenance
@@ -131,11 +133,13 @@ function calculateHealthScore(repo: any, issues: any[], prs: any[]): number {
 // Main Analysis Function
 async function analyzeRepositories(repoNames: string[]) {
   console.log(`\n🔍 Analyzing ${repoNames.length} repositories...`);
-  console.log(`📊 Cache stats: ${globalThis.repoCache.stats.cacheHits} hits, ${globalThis.repoCache.stats.cacheMisses} misses\n`);
+  console.log(
+    `📊 Cache stats: ${globalThis.repoCache.stats.cacheHits} hits, ${globalThis.repoCache.stats.cacheMisses} misses\n`,
+  );
 
   // Fetch all repos (using cache when possible)
   const repos = await Promise.all(
-    repoNames.map(name => getRepositoryData(name))
+    repoNames.map((name) => getRepositoryData(name)),
   );
 
   // Aggregate statistics
@@ -145,39 +149,47 @@ async function analyzeRepositories(repoNames: string[]) {
     totalOpenIssues: repos.reduce((sum, r) => sum + r.openIssues, 0),
     totalOpenPRs: repos.reduce((sum, r) => sum + r.openPRs, 0),
     averageHealthScore: Math.round(
-      repos.reduce((sum, r) => sum + r.healthScore, 0) / repos.length
+      repos.reduce((sum, r) => sum + r.healthScore, 0) / repos.length,
     ),
-    languages: [...new Set(repos.map(r => r.language).filter(Boolean))],
-    topics: [...new Set(repos.flatMap(r => r.topics))]
+    languages: [...new Set(repos.map((r) => r.language).filter(Boolean))],
+    topics: [...new Set(repos.flatMap((r) => r.topics))],
   };
 
   // Find repositories needing attention
-  const needsAttention = repos.filter(r => r.healthScore < 70);
+  const needsAttention = repos.filter((r) => r.healthScore < 70);
 
   // Sort by health score
   const byHealth = [...repos].sort((a, b) => b.healthScore - a.healthScore);
 
   return {
-    repositories: repos.map(r => ({
+    repositories: repos.map((r) => ({
       name: r.name,
       stars: r.stars,
       openIssues: r.openIssues,
       openPRs: r.openPRs,
       healthScore: r.healthScore,
-      language: r.language
+      language: r.language,
     })),
     aggregates,
-    needsAttention: needsAttention.map(r => ({
+    needsAttention: needsAttention.map((r) => ({
       name: r.name,
       healthScore: r.healthScore,
       issues: r.openIssues,
-      prs: r.openPRs
+      prs: r.openPRs,
     })),
     topRepositories: {
-      byHealth: byHealth.slice(0, 3).map(r => ({ name: r.name, score: r.healthScore })),
-      byStars: [...repos].sort((a, b) => b.stars - a.stars).slice(0, 3).map(r => ({ name: r.name, stars: r.stars })),
-      byActivity: [...repos].sort((a, b) => (b.openIssues + b.openPRs) - (a.openIssues + a.openPRs)).slice(0, 3).map(r => ({ name: r.name, activity: r.openIssues + r.openPRs }))
-    }
+      byHealth: byHealth
+        .slice(0, 3)
+        .map((r) => ({ name: r.name, score: r.healthScore })),
+      byStars: [...repos]
+        .sort((a, b) => b.stars - a.stars)
+        .slice(0, 3)
+        .map((r) => ({ name: r.name, stars: r.stars })),
+      byActivity: [...repos]
+        .sort((a, b) => b.openIssues + b.openPRs - (a.openIssues + a.openPRs))
+        .slice(0, 3)
+        .map((r) => ({ name: r.name, activity: r.openIssues + r.openPRs })),
+    },
   };
 }
 
@@ -185,23 +197,31 @@ async function analyzeRepositories(repoNames: string[]) {
 // EXAMPLE: First Execution in Conversation
 // ═══════════════════════════════════════════════════════════════
 
-console.log('🚀 First Analysis: Main Repositories\n');
+console.log("🚀 First Analysis: Main Repositories\n");
 
-const mainRepos = ['repo1', 'repo2', 'repo3', 'repo4', 'repo5'];
+const mainRepos = ["repo1", "repo2", "repo3", "repo4", "repo5"];
 const analysis1 = await analyzeRepositories(mainRepos);
 
-console.log('\n📊 Analysis Complete!\n');
-console.log('Aggregates:');
-console.log(`  Total Stars: ${analysis1.aggregates.totalStars.toLocaleString()}`);
+console.log("\n📊 Analysis Complete!\n");
+console.log("Aggregates:");
+console.log(
+  `  Total Stars: ${analysis1.aggregates.totalStars.toLocaleString()}`,
+);
 console.log(`  Total Open Issues: ${analysis1.aggregates.totalOpenIssues}`);
 console.log(`  Total Open PRs: ${analysis1.aggregates.totalOpenPRs}`);
-console.log(`  Average Health Score: ${analysis1.aggregates.averageHealthScore}/100`);
-console.log(`  Languages: ${analysis1.aggregates.languages.join(', ')}`);
+console.log(
+  `  Average Health Score: ${analysis1.aggregates.averageHealthScore}/100`,
+);
+console.log(`  Languages: ${analysis1.aggregates.languages.join(", ")}`);
 
 if (analysis1.needsAttention.length > 0) {
-  console.log(`\n⚠️  ${analysis1.needsAttention.length} repositories need attention:`);
-  analysis1.needsAttention.forEach(r => {
-    console.log(`  - ${r.name}: Score ${r.healthScore}/100 (${r.issues} issues, ${r.prs} PRs)`);
+  console.log(
+    `\n⚠️  ${analysis1.needsAttention.length} repositories need attention:`,
+  );
+  analysis1.needsAttention.forEach((r) => {
+    console.log(
+      `  - ${r.name}: Score ${r.healthScore}/100 (${r.issues} issues, ${r.prs} PRs)`,
+    );
   });
 }
 
@@ -210,44 +230,48 @@ if (analysis1.needsAttention.length > 0) {
 // Cache is still fresh - MASSIVE token savings!
 // ═══════════════════════════════════════════════════════════════
 
-console.log('\n\n🔄 Second Analysis: Comparing with Additional Repos\n');
+console.log("\n\n🔄 Second Analysis: Comparing with Additional Repos\n");
 
 // Analyze main repos again + 2 new ones
-const extendedRepos = [...mainRepos, 'repo6', 'repo7'];
+const extendedRepos = [...mainRepos, "repo6", "repo7"];
 const analysis2 = await analyzeRepositories(extendedRepos);
 
-console.log('\n📊 Extended Analysis Complete!\n');
+console.log("\n📊 Extended Analysis Complete!\n");
 console.log(`  Total Repositories: ${analysis2.repositories.length}`);
-console.log(`  New Average Health: ${analysis2.aggregates.averageHealthScore}/100`);
+console.log(
+  `  New Average Health: ${analysis2.aggregates.averageHealthScore}/100`,
+);
 
 // ═══════════════════════════════════════════════════════════════
 // Show cache efficiency
 // ═══════════════════════════════════════════════════════════════
 
-console.log('\n\n💨 Cache Performance:');
+console.log("\n\n💨 Cache Performance:");
 console.log(`  Cache Hits: ${globalThis.repoCache.stats.cacheHits}`);
 console.log(`  Cache Misses: ${globalThis.repoCache.stats.cacheMisses}`);
 console.log(`  API Calls Saved: ${globalThis.repoCache.stats.apiCallsSaved}`);
-console.log(`  Hit Rate: ${Math.round(100 * globalThis.repoCache.stats.cacheHits / (globalThis.repoCache.stats.cacheHits + globalThis.repoCache.stats.cacheMisses))}%`);
+console.log(
+  `  Hit Rate: ${Math.round((100 * globalThis.repoCache.stats.cacheHits) / (globalThis.repoCache.stats.cacheHits + globalThis.repoCache.stats.cacheMisses))}%`,
+);
 
 // Return final results
 return {
   firstAnalysis: {
     repos: analysis1.repositories.length,
     avgHealth: analysis1.aggregates.averageHealthScore,
-    needsAttention: analysis1.needsAttention.length
+    needsAttention: analysis1.needsAttention.length,
   },
   secondAnalysis: {
     repos: analysis2.repositories.length,
     avgHealth: analysis2.aggregates.averageHealthScore,
-    needsAttention: analysis2.needsAttention.length
+    needsAttention: analysis2.needsAttention.length,
   },
   cachePerformance: {
     hits: globalThis.repoCache.stats.cacheHits,
     misses: globalThis.repoCache.stats.cacheMisses,
     apiCallsSaved: globalThis.repoCache.stats.apiCallsSaved,
-    hitRate: `${Math.round(100 * globalThis.repoCache.stats.cacheHits / (globalThis.repoCache.stats.cacheHits + globalThis.repoCache.stats.cacheMisses))}%`
-  }
+    hitRate: `${Math.round((100 * globalThis.repoCache.stats.cacheHits) / (globalThis.repoCache.stats.cacheHits + globalThis.repoCache.stats.cacheMisses))}%`,
+  },
 };
 
 /*
@@ -276,16 +300,16 @@ return {
  *
  * First Execution (cache cold):
  * ├─ Traditional: ~180,000 tokens
- * ├─ Code Mode: ~12,000 tokens
+ * ├─ CodeModo: ~12,000 tokens
  * └─ Reduction: 93.3%
  *
  * Second Execution (cache warm for 5/7 repos):
  * ├─ Traditional: ~252,000 tokens (7 repos × 36K)
- * ├─ Code Mode: ~2,000 tokens (only 2 new repos fetched)
+ * ├─ CodeModo: ~2,000 tokens (only 2 new repos fetched)
  * └─ Reduction: 99.2% 🤯
  *
  * Total Across Both Executions:
  * ├─ Traditional: 432,000 tokens
- * ├─ Code Mode: 14,000 tokens
+ * ├─ CodeModo: 14,000 tokens
  * └─ Overall Reduction: 96.8%
  */

@@ -105,7 +105,7 @@ export const executeCodeTool: GetTool = ({ codeExecutionConfig }) => {
 
 5. **Skip the tool** for trivial answers (e.g., respond "4" directly when asked "What is 2 + 2?").
 
-**MCP Tools in Code Mode:**
+**MCP Tools in CodeModo:**
 
 All configured MCP tools are available as TypeScript modules at \`/mcp/{server-name}/\`:
 - Type-safe function signatures generated automatically
@@ -143,9 +143,9 @@ const tools = fs.readdirSync('/mcp/github');
 console.log('GitHub tools:', tools); // e.g., ['createIssue.ts', 'searchRepos.ts', ...]
 \`\`\`
 
-**When to use Code Mode vs. Direct Tool Calls:**
+**When to use CodeModo vs. Direct Tool Calls:**
 - Direct tools: Single, simple operations (e.g., "search GitHub for repo X")
-- Code Mode: Multi-step workflows, data filtering, complex orchestration (e.g., "find all open bugs, filter by priority, create summary report")`,
+- CodeModo: Multi-step workflows, data filtering, complex orchestration (e.g., "find all open bugs, filter by priority, create summary report")`,
       exampleArgs: [
         [
           "code",

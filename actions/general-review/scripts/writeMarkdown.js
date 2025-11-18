@@ -12,7 +12,7 @@ const messages = {
 `,
   cli_install_failed: `## Code Review Summary
 
-⚠️ AI review skipped: Continue CLI installation failed.
+⚠️ AI review skipped: CodeModo CLI installation failed.
 
 ### Troubleshooting
 - Check that npm installation succeeded
@@ -20,28 +20,28 @@ const messages = {
 `,
   empty_output: `## Code Review Summary
 
-⚠️ Continue CLI returned an empty response. Please check the configuration.
+⚠️ CodeModo CLI returned an empty response. Please check the configuration.
 `,
   cli_not_found: `## Code Review Summary
 
-⚠️ Continue CLI is not properly installed. Please ensure @continuedev/cli is installed globally.
+⚠️ CodeModo CLI is not properly installed. Please ensure @continuedev/cli is installed globally.
 `,
   config_error: `## Code Review Summary
 
-⚠️ Continue configuration error. Please verify that the assistant exists in Continue Hub.
+⚠️ CodeModo configuration error. Please verify that the assistant exists in CodeModo Hub.
 `,
   auth_error: `## Code Review Summary
 
-⚠️ Continue API authentication failed. Please check your CONTINUE_API_KEY.
+⚠️ CodeModo API authentication failed. Please check your CONTINUE_API_KEY.
 `,
   generic_failure: `## Code Review Summary
 
-⚠️ AI review failed. Please check the Continue API key and configuration.
+⚠️ AI review failed. Please check the CodeModo API key and configuration.
 
 ### Troubleshooting
 - Verify the CONTINUE_API_KEY secret is set correctly
 - Check that the organization and config path are valid
-- Ensure the Continue service is accessible
+- Ensure the CodeModo service is accessible
 `,
 };
 

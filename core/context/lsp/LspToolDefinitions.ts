@@ -44,11 +44,6 @@ export const LSP_TOOLS: Tool[] = [
           type: "number",
           description: "Zero-indexed character position",
         },
-        includeDeclaration: {
-          type: "boolean",
-          description: "Include the declaration in results",
-          default: false,
-        },
       },
     },
   },

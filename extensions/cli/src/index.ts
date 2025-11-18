@@ -13,6 +13,16 @@ import { remoteTest } from "./commands/remote-test.js";
 import { remote } from "./commands/remote.js";
 import { serve } from "./commands/serve.js";
 import {
+  worktreeCleanup,
+  worktreeCreate,
+  worktreeDiff,
+  worktreeList,
+  worktreeMerge,
+  worktreeRemove,
+  worktreeStatus,
+  worktreeValidate,
+} from "./commands/worktree.js";
+import {
   handleValidationErrors,
   validateFlags,
 } from "./flags/flagValidator.js";
@@ -346,6 +356,125 @@ program
     // Telemetry: record command invocation
     await posthogService.capture("cliCommand", { command: "remote-test" });
     await remoteTest(prompt, options.url);
+  });
+
+// Worktree commands
+const worktree = program
+  .command("worktree")
+  .description("Manage git worktrees for isolated workspaces");
+
+// Worktree create
+worktree
+  .command("create")
+  .description("Create a new worktree")
+  .option("--base-branch <branch>", "Base branch to create from")
+  .option("--branch-name <name>", "Custom branch name")
+  .option("--description <text>", "Description for this worktree")
+  .option("--agent-session-id <id>", "Agent session ID")
+  .action(async (options) => {
+    await posthogService.capture("cliCommand", { command: "worktree create" });
+    await worktreeCreate(options);
+  });
+
+// Worktree list
+worktree
+  .command("list")
+  .alias("ls")
+  .description("List all worktrees")
+  .option("--status <status>", "Filter by status")
+  .option("--format <format>", "Output format (table|json)")
+  .action(async (options) => {
+    await posthogService.capture("cliCommand", { command: "worktree list" });
+    await worktreeList(options);
+  });
+
+// Worktree diff
+worktree
+  .command("diff <source> <target>")
+  .description("Show diff between worktrees or branches")
+  .option("--stat", "Show only statistics")
+  .option("--name-only", "Show only file names")
+  .action(async (source, target, options) => {
+    await posthogService.capture("cliCommand", { command: "worktree diff" });
+    await worktreeDiff({ source, target, ...options });
+  });
+
+// Worktree merge
+worktree
+  .command("merge <session-id>")
+  .description("Merge worktree back to parent branch")
+  .option(
+    "--strategy <strategy>",
+    "Merge strategy (squash|merge|rebase|fast-forward)",
+  )
+  .option("--target <branch>", "Target branch (default: parent branch)")
+  .option("--message <text>", "Commit message")
+  .option("--delete", "Delete worktree after merge")
+  .option("--run-tests", "Run tests before merging")
+  .option("--force", "Force merge even with conflicts")
+  .action(async (sessionId, options) => {
+    await posthogService.capture("cliCommand", { command: "worktree merge" });
+    await worktreeMerge({
+      sessionId,
+      strategy: options.strategy,
+      targetBranch: options.target,
+      message: options.message,
+      deleteAfterMerge: options.delete,
+      runTests: options.runTests,
+      force: options.force,
+    });
+  });
+
+// Worktree remove
+worktree
+  .command("remove <session-id>")
+  .alias("rm")
+  .description("Remove a worktree")
+  .option("--force", "Force removal even with uncommitted changes")
+  .option("--delete-branch", "Delete the git branch as well")
+  .action(async (sessionId, options) => {
+    await posthogService.capture("cliCommand", { command: "worktree remove" });
+    await worktreeRemove({
+      sessionId,
+      force: options.force,
+      deleteBranch: options.deleteBranch,
+    });
+  });
+
+// Worktree cleanup
+worktree
+  .command("cleanup")
+  .description("Clean up old worktrees based on retention policy")
+  .option("--dry-run", "Show what would be removed without removing")
+  .action(async (options) => {
+    await posthogService.capture("cliCommand", { command: "worktree cleanup" });
+    await worktreeCleanup(options);
+  });
+
+// Worktree status
+worktree
+  .command("status <session-id>")
+  .description("Show detailed status of a worktree")
+  .action(async (sessionId) => {
+    await posthogService.capture("cliCommand", { command: "worktree status" });
+    await worktreeStatus({ sessionId });
+  });
+
+// Worktree validate
+worktree
+  .command("validate [session-id]")
+  .description("Validate worktree state and optionally repair")
+  .option("--all", "Validate all worktrees")
+  .option("--repair", "Attempt to repair issues")
+  .action(async (sessionId, options) => {
+    await posthogService.capture("cliCommand", {
+      command: "worktree validate",
+    });
+    await worktreeValidate({
+      sessionId,
+      all: options.all,
+      repair: options.repair,
+    });
   });
 
 // Handle unknown commands
