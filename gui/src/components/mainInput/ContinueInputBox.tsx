@@ -12,6 +12,7 @@ import type { WorktreeLaunchControl } from "../WorktreeMode/types";
 import { ContextItemsPeek } from "./belowMainInput/ContextItemsPeek";
 import { RulesPeek } from "./belowMainInput/RulesPeek";
 import { chatInputBorderRadius } from "./constants";
+import { ElectricBorder } from "./ElectricBorder";
 import { ToolbarOptions } from "./InputToolbar";
 import { Lump } from "./Lump";
 import { TipTapEditor } from "./TipTapEditor";
@@ -117,10 +118,9 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
     >
       <div className={`relative mb-2 flex flex-col px-2`}>
         {props.isMainInput && <Lump />}
-        <div
-          style={{
-            borderRadius: chatInputBorderRadius,
-          }}
+        <ElectricBorder
+          $loading={isStreaming && (props.isLastUserInput || isInEdit) ? 1 : 0}
+          $borderRadius={chatInputBorderRadius}
         >
           <TipTapEditor
             editorState={props.editorState}
@@ -136,7 +136,7 @@ function ContinueInputBox(props: ContinueInputBoxProps) {
             onEditorReady={props.onEditorReady}
             onActiveKeyChange={props.onActiveKeyChange}
           />
-        </div>
+        </ElectricBorder>
       </div>
 
       {(appliedRules.length > 0 || contextItems.length > 0) && (

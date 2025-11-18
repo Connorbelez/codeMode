@@ -71,22 +71,10 @@ export function WorktreeLaunchButton({
                 ? {
                     backgroundSize: "200% 100%",
                     animation: "gradient-flow 3s linear infinite",
-                    boxShadow:
-                      "0 0 15px rgba(0,255,0,0.4), 0 0 25px rgba(0,206,209,0.3)",
                   }
                 : undefined
             }
           >
-            {/* Glow effect when enabled */}
-            {enabled && (
-              <span
-                className="pointer-events-none absolute inset-0 rounded-full"
-                style={{
-                  animation: "glow-pulse 2s ease-in-out infinite",
-                }}
-              />
-            )}
-
             {/* Slider Thumb */}
             <span
               className={`bg-background pointer-events-none relative inline-flex h-5 w-5 items-center justify-center rounded-full shadow-lg ring-0 transition-transform duration-300 ease-in-out ${
