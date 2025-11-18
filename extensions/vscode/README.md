@@ -235,17 +235,17 @@ console.log(`Found ${totalTodos} TODOs across ${tsFiles.length} files`);
 
 ```mermaid
 flowchart LR
-    MCP[MCP Servers<br/>GitHub, Filesystem, etc.]
+    MCP[MCP Servers<br>GitHub, Filesystem, etc.]
 
-    GEN[Code Generator<br/>JSON Schema → TypeScript]
+    GEN[Code Generator<br>JSON Schema → TypeScript]
 
-    VFS[Virtual Filesystem<br/>/mcp/github/*.ts<br/>/mcp/filesystem/*.ts]
+    VFS[Virtual Filesystem<br>/mcp/github/*.ts<br>/mcp/filesystem/*.ts]
 
-    AGENT[AI Agent<br/>Writes TypeScript]
+    AGENT[AI Agent<br>Writes TypeScript]
 
-    SANDBOX[E2B Sandbox<br/>Executes code safely]
+    SANDBOX[E2B Sandbox<br>Executes code safely]
 
-    IPC[File-based IPC<br/>Sandbox ↔ Host]
+    IPC[File-based IPC<br>Sandbox ↔ Host]
 
     MCP -->|Tool schemas| GEN
     GEN -->|Generated .ts files| VFS
@@ -271,19 +271,19 @@ sequenceDiagram
     participant Host as Continue Host
 
     Note over User,Config: Setup Phase
-    User->>Config: Configure MCP server<br/>(mcpServers in config.yaml)
+    User->>Config: Configure MCP server<br>(mcpServers in config.yaml)
     Config->>MCP: Start MCP server process
 
     Note over MCP,VFS: Code Generation (Automatic)
     Config->>MCP: listTools()
-    MCP-->>Config: Return tool schemas<br/>(JSON Schema format)
+    MCP-->>Config: Return tool schemas<br>(JSON Schema format)
     Config->>Gen: Generate TypeScript wrappers
     Gen->>Gen: Convert JSON Schema → TS types
-    Gen->>VFS: Write /mcp/github/createIssue.ts<br/>/mcp/github/listIssues.ts<br/>etc.
+    Gen->>VFS: Write /mcp/github/createIssue.ts<br>/mcp/github/listIssues.ts<br>etc.
 
     Note over Agent,E2B: Runtime (Agent Execution)
     User->>Agent: "Create a GitHub issue..."
-    Agent->>Agent: Generate TypeScript code<br/>with imports
+    Agent->>Agent: Generate TypeScript code<br>with imports
     Agent->>E2B: Execute code in sandbox
 
     E2B->>VFS: import { github } from '/mcp'
@@ -293,11 +293,11 @@ sequenceDiagram
     E2B->>E2B: await github.createIssue({...})
     Note over E2B: Calls globalThis.__mcp_invoke
 
-    E2B->>Host: Write request to<br/>/tmp/continue_mcp/requests/{uuid}.json
+    E2B->>Host: Write request to<br>/tmp/continue_mcp/requests/{uuid}.json
     Host->>Host: Detect request file
     Host->>MCP: Forward tool call via MCP protocol
     MCP-->>Host: Return result
-    Host->>E2B: Write response to<br/>/tmp/continue_mcp/responses/{uuid}.json
+    Host->>E2B: Write response to<br>/tmp/continue_mcp/responses/{uuid}.json
 
     E2B->>E2B: Read response, resolve promise
     E2B-->>Agent: Return execution result
