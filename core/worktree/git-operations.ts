@@ -478,6 +478,8 @@ export class GitOperations implements IGitOperations {
             return { success: false, conflicts };
           }
         }
+        default:
+          throw new Error(`Unknown merge strategy: ${strategy}`);
       }
     } finally {
       // Restore original branch if we changed it

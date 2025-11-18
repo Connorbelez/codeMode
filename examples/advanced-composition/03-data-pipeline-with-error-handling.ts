@@ -165,7 +165,7 @@ for (const filename of files) {
       console.log(`  ✅ Synced to GitHub: ${githubUrl}`);
     } catch (githubError) {
       console.log(`  ⚠️  GitHub sync failed: ${githubError.message}`);
-      // Continue anyway - local processing succeeded
+      // CodeModo anyway - local processing succeeded
     }
 
     results.push({

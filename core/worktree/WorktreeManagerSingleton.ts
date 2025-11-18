@@ -708,11 +708,10 @@ export class WorktreeManagerSingleton implements IWorktreeManager {
     }
 
     // Perform merge (against repository root)
-    // Ensure targetBranch is checked out before merging
+    // Note: targetBranch checkout is handled separately before calling merge
     const mergeResult = await this.gitOps.merge(session.branchName, strategy, {
       message: options?.commitMessage,
       cwd: this.repositoryPath,
-      targetBranch: targetBranch, // Ensure target branch is checked out
     });
 
     if (!mergeResult.success) {

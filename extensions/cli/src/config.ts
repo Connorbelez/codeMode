@@ -23,7 +23,7 @@ import { getVersion } from "./version.js";
  */
 function getUserAgent(): string {
   const version = getVersion();
-  return `Continue-CLI/${version}`;
+  return `CodeModo-CLI/${version}`;
 }
 
 /**
